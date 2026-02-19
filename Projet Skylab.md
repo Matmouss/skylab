@@ -1,0 +1,22 @@
+# Planification de la partie info
+
+- gestion du pi:
+	- se connecter : https://forums.raspberrypi.com/viewtopic.php?t=11059 
+	- faire des tests des controles des ports usb
+	- préparer a la connexion avec ardupilot
+	- mettre en place un loop de base
+- Récupérer des infos sur la topologie et la carte:
+	- aller sur openstreet map, openTopographie et d'autres pour trouver des bases d'info
+	- https://fr-fr.topographic-map.com/map-sgt/Nantes/?center=47.2893%2C-1.52401&zoom=16
+	- https://cartes.gouv.fr/explorer-les-cartes/ plein de cartes super cool
+	- --> model topo de la france : https://portal.opentopography.org/raster?opentopoID=OTSDEM.092022.3035.1
+	- créer une carte utilisable pour une zone de recherche 
+- Créer un loop de surveillance :
+	- utiliser la caméra pour détecter des obstacles potentiels (caméra rgb) --> model de reconnaissance d'obstacles ?
+- planification de la trajectoire:
+	- Considérer chaque point de la carte comme le noeud d'un graphe, normalement ils devaient être de distance égale --> trouver un chemin qui minimise le dénivelé et le nombre de points --> A*
+- Créer un loop de récupération des instructions:
+	- a la réception des notifications faire un interpréteur d'instructions
+- Créer un loop de surveillance de feu:
+	- utiliser la caméra thermiques pour capter les points chauds
+	- faire un modèle pour reconnaitre une trainée de fumée
