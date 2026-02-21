@@ -109,7 +109,7 @@ if __name__ == "__main__":
     #dataset_info(dataset)
     #dataset_plot(dataset)
 
-    print(get_elevation(dataset, 3451535.0,2752425.0))
+    #print(get_elevation(dataset, 3451535.0,2752425.0))
 
     dataset.close()
 
