@@ -31,32 +31,35 @@ class Map:
         img_name = self.dataset.name
         ret += 'Image filename: {n}\n'.format(n=img_name)
 
-        num_bands = dataset.count
+        num_bands = self.dataset.count
         ret += 'Number of bands in image: {n}\n'.format(n=num_bands)
 
-        rows, cols = dataset.shape
+        rows, cols = self.dataset.shape
         ret += ('Image size is: {r} rows x {c} columns\n'.format(r=rows, c=cols))
 
-        desc = dataset.descriptions
-        metadata = dataset.meta
+        desc = self.dataset.descriptions
+        metadata = self.dataset.meta
 
         ret += ('Raster description: {desc}\n'.format(desc=desc))
 
-        driver = dataset.driver
+        driver = self.dataset.driver
         ret += ('Raster driver: {d}\n'.format(d=driver))
 
-        proj = dataset.crs
+        proj = self.dataset.crs
         ret += ('Image projection:')
         ret += (proj, '\n')
 
-        gt = dataset.transform
+        gt = self.dataset.transform
 
         ret += ('Image geo-transform:\n{gt}\n'.format(gt=gt))
 
         return ret
 
     def __del__(self):
-        self.dataset.close()
+        try:
+            self.dataset.close()
+        except:
+            pass
 
     def get_elevation(self, coord_a, coord_b):
         """
@@ -83,20 +86,4 @@ class Map:
         elevation = self.raster_data[row, col]
 
         return elevation
-
-
-if __name__ == "__main__":
-    tif_path = r"..\data\output_be.tif" 
-
-    if not os.path.exists(tif_path):
-        raise Exception(f"Erreur : Le fichier {tif_path} est introuvable.")
-
-    dataset =  rasterio.open(tif_path)
-
-    #dataset_info(dataset)
-    #dataset_plot(dataset)
-
-    #print(get_elevation(dataset, 3451535.0,2752425.0))
-
-    dataset.close()
 
