@@ -25,6 +25,15 @@ class Map:
         self.max_tree_height = max_tree_height
         self.security_height = security_height
         self.raster_data = self.dataset.read(1)
+
+    def __init__(self, config):
+        if "tif_path" not in config or "security_height" not in config or "max_tree_height" not in config: raise Exception(f"Erreur : clée manquante dans le fichier de configuration.")
+        self.tif_path = config["tif_path"]
+        if not os.path.exists(self.tif_path): raise Exception(f"Erreur : Le fichier {self.tif_path} est introuvable.")
+        self.dataset = rasterio.open(self.tif_path)
+        self.max_tree_height = config["max_tree_height"]
+        self.security_height = config["security_height"]
+        self.raster_data = self.dataset.read(1)
         
     def __str__(self):
         ret = ""
