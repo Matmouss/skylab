@@ -3,8 +3,6 @@ import numpy as np
 from pyproj import Transformer
 import os
 
-
-
 """
 open topography: https://portal.opentopography.org/raster?opentopoID=OTSDEM.092022.3035.1
 
@@ -34,35 +32,6 @@ class Map:
         self.max_tree_height = config["max_tree_height"]
         self.security_height = config["security_height"]
         self.raster_data = self.dataset.read(1)
-        
-    def __str__(self):
-        ret = ""
-        img_name = self.dataset.name
-        ret += 'Image filename: {n}\n'.format(n=img_name)
-
-        num_bands = self.dataset.count
-        ret += 'Number of bands in image: {n}\n'.format(n=num_bands)
-
-        rows, cols = self.dataset.shape
-        ret += ('Image size is: {r} rows x {c} columns\n'.format(r=rows, c=cols))
-
-        desc = self.dataset.descriptions
-        metadata = self.dataset.meta
-
-        ret += ('Raster description: {desc}\n'.format(desc=desc))
-
-        driver = self.dataset.driver
-        ret += ('Raster driver: {d}\n'.format(d=driver))
-
-        proj = self.dataset.crs
-        ret += ('Image projection:')
-        ret += (proj, '\n')
-
-        gt = self.dataset.transform
-
-        ret += ('Image geo-transform:\n{gt}\n'.format(gt=gt))
-
-        return ret
 
     def __del__(self):
         try:
@@ -95,4 +64,34 @@ class Map:
         elevation = self.raster_data[row, col]
 
         return elevation
+    
+    # str a modifier les infos ne sont pas pertinentes pour le moment
+    def __str__(self):
+        ret = ""
+        img_name = self.dataset.name
+        ret += 'Image filename: {n}\n'.format(n=img_name)
+
+        num_bands = self.dataset.count
+        ret += 'Number of bands in image: {n}\n'.format(n=num_bands)
+
+        rows, cols = self.dataset.shape
+        ret += ('Image size is: {r} rows x {c} columns\n'.format(r=rows, c=cols))
+
+        desc = self.dataset.descriptions
+        metadata = self.dataset.meta
+
+        ret += ('Raster description: {desc}\n'.format(desc=desc))
+
+        driver = self.dataset.driver
+        ret += ('Raster driver: {d}\n'.format(d=driver))
+
+        proj = self.dataset.crs
+        ret += ('Image projection:')
+        ret += (proj, '\n')
+
+        gt = self.dataset.transform
+
+        ret += ('Image geo-transform:\n{gt}\n'.format(gt=gt))
+
+        return ret
 
