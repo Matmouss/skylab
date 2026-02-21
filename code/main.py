@@ -10,3 +10,7 @@ if __name__ == "__main__":
     current_map = topography.Map(config)
 
     print(current_map.get_elevation(3451535.0,2752425.0))
+
+    #print(current_map.__str__())
+
+    graphics.height_plot(current_map.raster_data[5], current_map.security_height, current_map.max_tree_height, current_map.max_fly_height)

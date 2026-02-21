@@ -15,13 +15,14 @@ https://github.com/patrickcgray/open-geo-tutorial
 """
 
 class Map:
-    def __init__(self, tif_path, max_tree_height = 20,security_height=5):
+    def __init__(self, tif_path, max_tree_height = 20,security_height=5, max_fly_height=60):
         if not os.path.exists(tif_path):
             raise Exception(f"Erreur : Le fichier {tif_path} est introuvable.")
         self.tif_path = tif_path
         self.dataset = rasterio.open(tif_path)
         self.max_tree_height = max_tree_height
         self.security_height = security_height
+        self.max_fly_height = max_fly_height
         self.raster_data = self.dataset.read(1)
 
     def __init__(self, config):
@@ -31,6 +32,7 @@ class Map:
         self.dataset = rasterio.open(self.tif_path)
         self.max_tree_height = config["max_tree_height"]
         self.security_height = config["security_height"]
+        self.max_fly_height = config["max_fly_height"]
         self.raster_data = self.dataset.read(1)
 
     def __del__(self):
@@ -71,27 +73,10 @@ class Map:
         img_name = self.dataset.name
         ret += 'Image filename: {n}\n'.format(n=img_name)
 
-        num_bands = self.dataset.count
-        ret += 'Number of bands in image: {n}\n'.format(n=num_bands)
+        ret += 'Max tree height: {h} m\n'.format(h=self.max_tree_height)
+        ret += 'Security height: {h} m\n'.format(h=self.security_height)
 
-        rows, cols = self.dataset.shape
-        ret += ('Image size is: {r} rows x {c} columns\n'.format(r=rows, c=cols))
-
-        desc = self.dataset.descriptions
-        metadata = self.dataset.meta
-
-        ret += ('Raster description: {desc}\n'.format(desc=desc))
-
-        driver = self.dataset.driver
-        ret += ('Raster driver: {d}\n'.format(d=driver))
-
-        proj = self.dataset.crs
-        ret += ('Image projection:')
-        ret += (proj, '\n')
-
-        gt = self.dataset.transform
-
-        ret += ('Image geo-transform:\n{gt}\n'.format(gt=gt))
+        ret += 'Projection: {p}\n'.format(p=self.raster_data)
 
         return ret
 
