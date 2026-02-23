@@ -9,7 +9,8 @@ if __name__ == "__main__":
 
     current_map = topography.Map(config)
 
-
+    print(current_map.__str__())
+    
     """
     méthodes d'affihage
 

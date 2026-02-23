@@ -1,5 +1,6 @@
 {
     "tif_path": "..\\data\\output_be.tif" ,
+    "map_shape": [],
     "security_height": 5,
     "max_tree_height": 20,
     "max_fly_height": 60
