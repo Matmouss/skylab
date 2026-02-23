@@ -1,4 +1,4 @@
-import topography, graphics, os, json
+import topography, graphics, fly_control, os, json
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9,8 +9,13 @@ if __name__ == "__main__":
 
     current_map = topography.Map(config)
 
+
+    """
+    méthodes d'affihage
+
     print(current_map.get_elevation(3451535.0,2752425.0))
 
-    #print(current_map.__str__())
+    print(current_map.__str__())
 
     graphics.height_plot(current_map.raster_data[5], current_map.security_height, current_map.max_tree_height, current_map.max_fly_height)
+    """
