@@ -20,11 +20,11 @@ def dataset_plot(dataset):
     plt.show()
 
 def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, fly_array = None):
-    plt.plot(heigth_array, label='terrain heigth')
+    plt.plot(heigth_array, label='terrain heigth', alpha=0.4)
     if fly_array is not None:
-        plt.plot(fly_array, label='fly')
-    plt.plot(max_tree_height + heigth_array, 'g', label='terrain heigth + max_tree_height')
-    plt.plot(max_tree_height + security_height + heigth_array, 'b', label='terrain heigth + max_tree_height + security_height')
+        plt.plot(fly_array, label='flight plan')
+    plt.plot(max_tree_height + heigth_array, color="darkgreen", label='terrain heigth + max_tree_height', alpha=0.4)
+    plt.fill_between(range(len(heigth_array)), max_tree_height + security_height + heigth_array, color="skyblue", alpha=0.4, label='terrain heigth + max_tree_height + security_height')
     plt.axhline(y=max_fly_height, color='r', label='max_fly_height')
     plt.legend()
     plt.show()
