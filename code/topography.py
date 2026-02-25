@@ -2,6 +2,7 @@ import rasterio
 import numpy as np
 from pyproj import Transformer
 import os
+import matplotlib.path as mpltPath
 
 """
 open topography: https://portal.opentopography.org/raster?opentopoID=OTSDEM.092022.3035.1
@@ -26,6 +27,7 @@ class Map:
         self.max_fly_height = config["max_fly_height"]
         self.raster_data = self.dataset.read(1)
         self.map_shape = self.create_fly_boundaries(config["map_shape"])
+        self.mplt_shape = mpltPath.Path([[i[0], i[1]] for i in self.map_shape],closed=True)
 
     def __del__(self):
         try:
@@ -55,10 +57,7 @@ class Map:
 
 
     def in_map_shape(self, target_x, target_y):
-        for i in range(len(self.map_shape)):
-            if self.map_shape[i][0] <= target_x <= self.map_shape[i][2] and self.map_shape[i][1] <= target_y <= self.map_shape[i][3]:
-                return True
-        return False
+        return self.mplt_shape.contains_point((target_x, target_y))
 
     def in_bounding_box(self, target_x, target_y):
         b = self.dataset.bounds
