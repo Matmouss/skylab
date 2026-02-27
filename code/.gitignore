@@ -1,0 +1,27 @@
+# --- Dossiers d'environnement virtuel (Python venv) ---
+venv/
+.venv/
+env/
+bin/
+lib/
+include/
+
+# --- Caches Python ---
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Données volumineuses (Fichiers TIF/Images) ---
+# Si vous voulez garder les données sur votre PC mais pas sur GitHub
+data/*.tif
+*.tif
+*.tiff
+
+# --- Fichiers système ---
+.DS_Store
+Thumbs.db
+
+# --- Fichiers de configuration locale ---
+.idea/
+.vscode/
+.env

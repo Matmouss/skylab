@@ -1,5 +1,5 @@
 {
-    "tif_path": "..\\data\\output_be.tif" ,
+    "tif_path": "../data/output_be.tif",
     "map_shape": [
             [
               -1.5266093349096082,

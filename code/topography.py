@@ -3,6 +3,7 @@ import numpy as np
 from pyproj import Transformer
 import os
 import matplotlib.path as mpltPath
+import random
 
 """
 open topography: https://portal.opentopography.org/raster?opentopoID=OTSDEM.092022.3035.1
@@ -36,24 +37,18 @@ class Map:
             pass
 
     def create_fly_boundaries(self, shape):
-        for i in range(len(shape)):
-            # ici 0 et 1 inversés car l'ordre des coordonnées est inverse voir une méthode générique
-            shape[i][0], shape[i][1] = self.convert_coords(shape[i][1], shape[i][0])
-            self.in_bounding_box(shape[i][0], shape[i][1])
-        return shape
+        new_shape = []
+        for pt in shape:
+            proj_x, proj_y = self.convert_coords(pt[0], pt[1])
+            new_shape.append([proj_x, proj_y])
+        return new_shape
 
-    def convert_coords(self, coord_a, coord_b):
-        """
-        Si les valeurs sont petites (entre -180 et 180), on considère que c'est du GPS (WGS84)
-            --> Création du transformateur : GPS (EPSG:4326) -> Projection du TIF (ex: EPSG:3035)
-        Sinon, on considère que ce sont déjà des coordonnées en mètres
-        """
-        if abs(coord_a) < 1000 and abs(coord_b) < 1000:
-            lat, lon = coord_a, coord_b
+    def convert_coords(self, lon, lat):
+        if abs(lon) < 1000 and abs(lat) < 1000:
             transformer = Transformer.from_crs("EPSG:4326", self.dataset.crs, always_xy=True)
             return transformer.transform(lon, lat)
         else:
-            return coord_a, coord_b
+            return lon, lat
 
 
     def in_map_shape(self, target_x, target_y):
@@ -78,6 +73,25 @@ class Map:
         elevation = self.raster_data[row, col]
 
         return elevation
+       
+    def get_random_valid_point(self):
+       
+        b = self.dataset.bounds
+        max_attempts = 1000
+        
+        for _ in range(max_attempts):
+
+            rand_x = random.uniform(b.left, b.right)
+            rand_y = random.uniform(b.bottom, b.top)
+            
+            if self.in_map_shape(rand_x, rand_y):
+                row, col = self.dataset.index(rand_x, rand_y)
+                elevation = self.raster_data[row, col]
+                if (elevation + self.max_tree_height + self.security_height) < self.max_fly_height:
+                    lon, lat = self.dataset.xy(row, col)
+                    return (lon, lat)
+        
+        raise Exception("Impossible de trouver un point aléatoire valide dans la zone actuelle avec les contraintes d'altitude données.")
     
     # str a modifier les infos ne sont pas pertinentes pour le moment
     def __str__(self):
