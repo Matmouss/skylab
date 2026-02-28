@@ -18,12 +18,13 @@ def dataset_plot(dataset):
     ax2.imshow(full_img[0, :, :])
     ax2.set_title('color - Band 1 '.format(nir.shape))
     plt.show()
-def map_plot(dataset, map_shape, points_in_shape=None, points_out_shape=None):
+
+def map_plot(dataset, map_shape, points_in_shape=None, points_out_shape=None, draw_path = False):
     
 
     full_img = dataset.read(1)
 
-    plt.figure(figsize=(10, 8))
+    #plt.figure(figsize=(10, 8))
     
 
     pixels = [dataset.index(lon, lat) for lon, lat in map_shape]
@@ -37,31 +38,37 @@ def map_plot(dataset, map_shape, points_in_shape=None, points_out_shape=None):
         rows_in = [p[0] for p in pixels_in]
         cols_in = [p[1] for p in pixels_in]
        
-        plt.plot(cols_in, rows_in, color='#00FF00', linewidth=1.5, 
-                 marker='o', markersize=3, label='A* Flight Path', zorder=3)
 
 
     if points_out_shape is not None:
         pixels_out = [dataset.index(lon, lat) for lon, lat in points_out_shape]
         rows_out = [p[0] for p in pixels_out]
         cols_out = [p[1] for p in pixels_out]
+
+    if draw_path:
+        plt.plot(cols_in, rows_in, color='#00FF00', linewidth=1.5, 
+                 marker='o', markersize=3, label='A* Flight Path', zorder=3)
         plt.scatter(cols_out, rows_out, color='red', s=50, edgecolors='white', 
                     label='Start/End Points', zorder=4)
+        plt.title("UAV Path Planning - A* Algorithm Visualization")
+    else :
+        plt.scatter(cols_out, rows_out, color='red', alpha=0.4)
+        plt.scatter(cols_in, rows_in, color='#00FF00', alpha=0.6)
+        plt.title("Points in/out Map Shape")
 
-
-    plt.imshow(full_img, cmap='terrain') 
+    plt.imshow(full_img, cmap='gray') 
     plt.colorbar(label='Elevation (m)')
     
-    plt.title("UAV Path Planning - A* Algorithm Visualization")
+
     plt.xlabel("Pixel Column")
     plt.ylabel("Pixel Row")
     plt.legend(loc='upper right')
     
     
-    if points_in_shape:
+    """if points_in_shape:
         margin = 50
         plt.xlim(min(cols_in) - margin, max(cols_in) + margin)
-        plt.ylim(max(rows_in) + margin, min(rows_in) - margin) 
+        plt.ylim(max(rows_in) + margin, min(rows_in) - margin) """
 
     plt.show()
 
