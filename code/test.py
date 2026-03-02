@@ -1,5 +1,5 @@
-import graphics
-import random
+import graphics, random, fly_control
+import numpy as np
 
 def generic_test(current_map):
 
@@ -34,26 +34,22 @@ def carte_et_points(current_map, nb_points):
 
     graphics.map_plot(current_map.dataset, current_map.map_shape, points_in_shape, points_out_shape)
 
-def astar(current_map, planner, config):
-        # Définition des coordonnées de départ et d'arrivée (Longitude, Latitude)
+def astar(current_map):
     start_pt = (-1.5255, 47.2880) 
     end_pt = (-1.524654200951312, 47.2866)
 
-    # Conversion des coordonnées géographiques en coordonnées projetées (système local)
     start_proj = current_map.convert_coords(*start_pt)
     end_proj = current_map.convert_coords(*end_pt)
 
-    # Vérification si les points se situent à l'intérieur du polygone de mission (map_shape)
     print(f"Coordonnées projetées Départ : {start_proj}, Dans la zone : {current_map.in_map_shape(*start_proj)}")
     print(f"Coordonnées projetées Arrivée : {end_proj}, Dans la zone : {current_map.in_map_shape(*end_proj)}")
 
     # Calcul de la trajectoire optimale via l'algorithme A*
-    path = planner.plan(start_pt, end_pt)
+    path = fly_control.astar(current_map, start_pt, end_pt)
 
     if path:
         print(f"Succès : Chemin trouvé avec {len(path)} waypoints.")
         
-        # Visualisation de la carte avec la trajectoire planifiée
         graphics.map_plot(
             dataset=current_map.dataset, 
             map_shape=current_map.map_shape, 
@@ -61,6 +57,10 @@ def astar(current_map, planner, config):
             points_out_shape=[start_pt, end_pt],
             draw_path=True
         )
+
+        height_array = np.array([current_map.get_elevation(*pt) for pt in path])
+        graphics.height_plot(height_array, current_map.security_height, current_map.max_tree_height, current_map.max_fly_height, height_array)
+        print(path)
     else:
         # Message d'erreur si aucun chemin n'est trouvé
         print("Erreur : Aucun chemin valide trouvé. Vérifiez si les points sont bien dans la zone autorisée.")

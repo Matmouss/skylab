@@ -19,7 +19,7 @@ def dataset_plot(dataset):
     ax2.set_title('color - Band 1 '.format(nir.shape))
     plt.show()
 
-def map_plot(dataset, map_shape, points_in_shape=None, points_out_shape=None, draw_path = False):
+def map_plot(dataset, map_shape,points_in_shape=None, points_out_shape=None, draw_path = False):
     
 
     full_img = dataset.read(1)

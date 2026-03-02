@@ -8,7 +8,6 @@ if __name__ == "__main__":
     config = json.load(open(config_json_path))
 
     current_map = topography.Map(config)
-    planner = fly_control.AStarPlanner(current_map) 
 
     test.carte_et_points(current_map, 500)
-    test.astar(current_map, planner, config)
+    test.astar(current_map)
