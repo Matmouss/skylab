@@ -91,6 +91,9 @@ class Map:
         elevation = self.raster_data[row, col]
 
         return elevation
+    
+    def get_fly_height (self, coord_a, coord_b):
+        return self.get_elevation(coord_a, coord_b) + self.max_tree_height + self.security_height
        
     def get_random_valid_point(self):
        
