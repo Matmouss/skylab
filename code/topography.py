@@ -51,7 +51,6 @@ class Map:
         else:
             return lon, lat
 
-
     def in_map_shape(self, target_x, target_y):
         return self.mplt_shape.contains_point((target_x, target_y))
 
