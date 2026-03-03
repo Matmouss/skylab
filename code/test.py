@@ -70,27 +70,26 @@ def astar(current_map, nb_paths):
 
             fly_path = np.array([current_map.get_fly_height(*pt) for pt in path])
 
+            n = 10
             heigth_array = []
-            n = 5 
-            for i in range(len(path) - 1):
-                x, y = [], []
-                if path[i][0] < path[i + 1][0] and path[i][1] < path[i + 1][1]:
-                    x = list(np.linspace(path[i][0], path[i + 1][0]))
-                    y = list(np.linspace(path[i][1], path[i + 1][1]))
-                elif path[i][0] < path[i + 1][0] and path[i][1] > path[i + 1][1]:
-                    x = list(np.linspace(path[i][0], path[i + 1][0]))
-                    y = list(np.linspace(path[i][1], path[i + 1][1]))[::-1]
-                elif path[i][0] > path[i + 1][0] and path[i][1] < path[i + 1][1]:    
-                    x = list(np.linspace(path[i][0], path[i + 1][0]))[::-1]
-                    y = list(np.linspace(path[i][1], path[i + 1][1]))
-                elif path[i][0] > path[i + 1][0] and path[i][1] > path[i + 1][1]:
-                    x = list(np.linspace(path[i][0], path[i + 1][0]))[::-1]
-                    y = list(np.linspace(path[i][1], path[i + 1][1]))[::-1]
+            for k in range(len(path) - 1):
+                x = np.linspace(path[k][0], path[k + 1][0], n, endpoint=False)
+                y = np.linspace(path[k][1], path[k + 1][1], n, endpoint=False)
+                for j in range(n):
+                    heigth_array.append(current_map.get_elevation(x[j], y[j]))
 
-                for i in range(len(x)):
-                    heigth_array.append(current_map.get_elevation(x[i], y[i]))
+            heigth_array.append(current_map.get_elevation(path[-1][0], path[-1][1]))
+            heigth_array = np.array(heigth_array)
 
-            graphics.height_plot(np.array(heigth_array), current_map.security_height, current_map.max_tree_height, current_map.max_fly_height, fly_path, [i*n*10 for i in range(len(path))])
+            fly_array_x = np.arange(len(path)) * n
 
+            graphics.height_plot(
+                heigth_array,
+                current_map.security_height,
+                current_map.max_tree_height,
+                current_map.max_fly_height,
+                fly_array_y=fly_path,
+                fly_array_x=fly_array_x
+            )
         else:
             print("Erreur : Aucun chemin valide trouvé. Vérifiez si les points sont bien dans la zone autorisée.")

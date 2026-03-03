@@ -16,7 +16,7 @@ def get_cost(current_map, current_node, neighbor_node):
     dist = np.sqrt((current_node[0] - neighbor_node[0])**2 + (current_node[1] - neighbor_node[1])**2)
     
     # Pénalité d'altitude : Encourage le drone à rester dans les zones basses
-    elevation = current_map.raster_data[neighbor_node[0], neighbor_node[1]]
+    elevation = current_map.  raster_data[neighbor_node[0], neighbor_node[1]]
     elevation_penalty = elevation * 0.5 
     
     return dist + elevation_penalty
