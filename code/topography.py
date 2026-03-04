@@ -27,6 +27,7 @@ class Map:
         self.security_height = config["security_height"]
         self.max_fly_height = config["max_fly_height"]
         self.raster_data = self.dataset.read(1)
+        self.rows, self.cols = self.raster_data.shape
         self.map_shape = self.create_fly_boundaries(config["map_shape"])
         self.mplt_shape = mpltPath.Path([[i[0], i[1]] for i in self.map_shape],closed=True)
 
@@ -50,7 +51,6 @@ class Map:
         else:
             return lon, lat
 
-
     def in_map_shape(self, target_x, target_y):
         return self.mplt_shape.contains_point((target_x, target_y))
 
@@ -60,6 +60,23 @@ class Map:
             raise Exception(f"Hors limites ! Les coordonnées sont en dehors de l'emprise du fichier TIF.\n"
                     f"   Emprise du fichier : X[{b.left:.1f}, {b.right:.1f}], Y[{b.bottom:.1f}, {b.top:.1f}]\n"
                     f"   Coordonnées : X[{target_x:.1f}], Y[{target_y:.1f}]")
+        
+    def is_valid(self, row, col):
+        """
+        Vérifie si une cellule (pixel) est accessible pour le drone.
+        """
+        if not (0 <= row < self.rows and 0 <= col < self.cols):
+            return False
+        
+        terrain_height = self.raster_data[row, col]
+        required_height = terrain_height + self.max_tree_height + self.security_height
+        
+        if required_height > self.max_fly_height:
+            return False  # Zone trop haute, considérée comme obstacle
+
+        x, y = self.dataset.xy(row, col)
+        return self.in_map_shape(x, y)
+
 
     def get_elevation(self, coord_a, coord_b):
         
@@ -73,6 +90,9 @@ class Map:
         elevation = self.raster_data[row, col]
 
         return elevation
+    
+    def get_fly_height (self, coord_a, coord_b):
+        return self.get_elevation(coord_a, coord_b) + self.max_tree_height + self.security_height
        
     def get_random_valid_point(self):
        
