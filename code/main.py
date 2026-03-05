@@ -80,40 +80,54 @@ def main():
 
     state = change_drone_state(logger, None, 11)
     start_time = time.time()
+    lat, lon = 0, 0
+    altitude = 0 # hors test mentionner l'altitude réelle de départ
 
     running = True
 
     while running:
 
-        match state:
-            case 11:
-                for i in range(10):
-                    log_state(logger, i, i, i, 100)
-                running = False
-                # au sol
-                pass
-            case 12:
-                # decollage
-                pass
-            case 13:
-                # atterrissage
-                pass
-            case 14:
-                # en vol
-                pass
-            case 15:
-                # scan local
-                pass
+        try :
 
-            case 40:
-                # urgence indéterminée
-                pass
-            case 41:
-                # retour d'urgence
-                pass
+            match state:
+                case 11:
+                    for i in range(10):
+                        log_state(logger, i, i, i, 100-i)
+                    running = False
+                    # au sol
+                    pass
+                case 12:
+                    # decollage
+                    pass
+                case 13:
+                    # atterrissage
+                    pass
+                case 14:
+                    # en vol
+                    pass
+                case 15:
+                    # scan local
+                    pass
 
-            case _:
-                print("Etat inconnu")
+                case 40:
+                    # urgence indéterminée
+                    pass
+                case 41:
+                    # retour d'urgence
+                    pass
+
+                case _:
+                    print("Etat inconnu")
+
+        except Exception as e:
+
+            logger.critical(f"loop crash: {e}", exc_info=True)
+
+            #emergency_procedure()
+
+            #reset_system_state()
+
+            state = change_drone_state(logger, state, 40)
 
     logger.info("FIN DE MISSION")
 
