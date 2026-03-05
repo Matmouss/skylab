@@ -80,7 +80,7 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.show()
 
 def mutliplot_path(current_map, paths):
-    fig, axs = plt.subplots(len(paths), 2, figsize=(12, 6), squeeze=False)
+    fig, axs = plt.subplots(len(paths), 2, squeeze=False)
     dataset = current_map.dataset
     full_img = dataset.read(1)
 
@@ -99,7 +99,7 @@ def mutliplot_path(current_map, paths):
 
         axs[i, 0].set_title(f"A* Visualization {i+1}")
         im = axs[i, 0].imshow(full_img, cmap='gray')
-        fig.colorbar(im, ax=axs[i, 0], label='Elevation (m)')
+        #fig.colorbar(im, ax=axs[i, 0], label='Elevation (m)')
         axs[i, 0].legend(loc='upper right')
 
         # profil

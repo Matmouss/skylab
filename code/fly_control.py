@@ -1,24 +1,24 @@
 import heapq
 import numpy as np
 
-def heuristic(a, b):
+def get_cost(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
 
-def get_cost(current_map, current_node, neighbor_node):
+def heuristic(current_map, current_node, neighbor_node, penalty):
     """
     Calcule le coût de déplacement : Coût de distance + Pénalité d'altitude.
+    Coût de distance de base (1.0 pour orthogonal, 1.414 pour diagonal)
+    Pénalité d'altitude : Encourage le drone à rester dans les zones basses
     """
-    # Coût de distance de base (1.0 pour orthogonal, 1.414 pour diagonal)
     dist = np.sqrt((current_node[0] - neighbor_node[0])**2 + (current_node[1] - neighbor_node[1])**2)
     
-    # Pénalité d'altitude : Encourage le drone à rester dans les zones basses
     elevation = current_map.  raster_data[neighbor_node[0], neighbor_node[1]]
-    elevation_penalty = elevation * 0.5 
+    elevation_penalty = elevation * penalty
     
     return dist + elevation_penalty
 
-def astar(current_map, start_lon_lat, end_lon_lat):
+def astar(current_map, start_lon_lat, end_lon_lat, penalty):
     """
     Exécute l'algorithme A* pour trouver le chemin optimal entre deux points GPS.
     """
@@ -37,7 +37,7 @@ def astar(current_map, start_lon_lat, end_lon_lat):
     
     came_from = {} # Pour reconstruire le chemin
     g_score = {start_node: 0} # Coût du départ au nœud actuel
-    f_score = {start_node: heuristic(start_node, end_node)} # Estimation totale
+    f_score = {start_node: heuristic(current_map, start_node, end_node, penalty)} # Estimation totale
 
     while open_set:
         # Récupérer le nœud avec le f_score le plus bas
@@ -52,13 +52,13 @@ def astar(current_map, start_lon_lat, end_lon_lat):
             neighbor = (current[0] + dr, current[1] + dc)
 
             if current_map.is_valid(neighbor[0], neighbor[1]):
-                tentative_g_score = g_score[current] + get_cost(current_map, current, neighbor)
+                tentative_g_score = g_score[current] + get_cost(current, neighbor)
 
                 if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
                     # Ce chemin est le meilleur trouvé jusqu'à présent
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, end_node)
+                    f_score[neighbor] = tentative_g_score + heuristic(current_map, neighbor, end_node, penalty)
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
     return None # Aucun chemin trouvé

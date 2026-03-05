@@ -97,11 +97,15 @@ def astar(current_map, nb_paths):
 
 def astar_comparaison(current_map, n = 1):
     paths = []
-    start_pt = polygon_random_points(current_map)
-    end_pt = polygon_random_points(current_map)
+    start_pt = (-1.531098974090213,
+            47.28897545723686)
+    end_pt = (-1.5146818725710602,
+            47.284347803564884)
 
     start_proj = current_map.convert_coords(*start_pt)
     end_proj = current_map.convert_coords(*end_pt)
+
+    penaltys = np.linspace(0, 1, n)
 
     for i in range(n):
 
@@ -109,7 +113,7 @@ def astar_comparaison(current_map, n = 1):
         print(f"Coordonnées projetées Arrivée : {end_proj}, Dans la zone : {current_map.in_map_shape(*end_proj)}")
 
         # Calcul de la trajectoire optimale via l'algorithme A*
-        path = fly_control.astar(current_map, start_pt, end_pt)
+        path = fly_control.astar(current_map, start_pt, end_pt, penaltys[i])
 
         if path:
             print(f"Succès : Chemin trouvé avec {len(path)} waypoints.")
