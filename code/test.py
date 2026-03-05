@@ -97,6 +97,7 @@ def astar(current_map, nb_paths):
 
 def astar_comparaison(current_map, n = 1):
     paths = []
+    titles = []
     start_pt = (-1.531098974090213,
             47.28897545723686)
     end_pt = (-1.5146818725710602,
@@ -118,9 +119,11 @@ def astar_comparaison(current_map, n = 1):
         if path:
             print(f"Succès : Chemin trouvé avec {len(path)} waypoints.")
             paths.append(path)
+            titles.append(f"Penalty : {penaltys[i]}")
         else:
             print("Erreur : Aucun chemin valide rencontré. Vérifiez si les points sont bien dans la zone autorisée.")
             paths.append([])
+            titles.append(f"Penalty : {penaltys[i]}")
     
     print(len(paths))
-    graphics.mutliplot_path(current_map, paths)
+    graphics.mutliplot_path(current_map, paths, titles)

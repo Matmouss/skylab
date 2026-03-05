@@ -79,8 +79,14 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.legend(loc='upper right')
     plt.show()
 
-def mutliplot_path(current_map, paths):
-    fig, axs = plt.subplots(len(paths), 2, squeeze=False)
+def mutliplot_path(current_map, paths, titles):
+    fig, axs = plt.subplots(
+    len(paths),
+    2,
+    squeeze=False,
+    figsize=(12, 4*len(paths)),
+    gridspec_kw={"width_ratios": [1.8, 3]}  # gauche plus large
+    )
     dataset = current_map.dataset
     full_img = dataset.read(1)
 
@@ -101,11 +107,13 @@ def mutliplot_path(current_map, paths):
         im = axs[i, 0].imshow(full_img, cmap='gray')
         #fig.colorbar(im, ax=axs[i, 0], label='Elevation (m)')
         axs[i, 0].legend(loc='upper right')
+        axs[i,0].set_xticks([])
+        axs[i,0].set_yticks([])
 
         # profil
         fly_path = np.array([current_map.get_fly_height(*pt) for pt in path])
 
-        n = 10
+        n = 1
         heigth_array = []
         for k in range(len(path) - 1):
             x = np.linspace(path[k][0], path[k + 1][0], n, endpoint=False)
@@ -128,7 +136,8 @@ def mutliplot_path(current_map, paths):
             color="skyblue", alpha=0.4, label='terrain + tree + security'
         )
         axs[i, 1].axhline(y=current_map.max_fly_height, color='r', label='max_fly_height')
+        axs[i, 1].set_title(f"Profil {i+1} : {len(path)} points | {titles[i]}")
         axs[i, 1].legend(loc='upper right')
-
+        axs[i,1].set_xticks([])
     plt.tight_layout()
     plt.show()
