@@ -1,5 +1,14 @@
-import topography, fly_control, os, json, graphics, test, time
+import topography, fly_control, os, json, graphics, test, time, logging
 import numpy as np
+
+def log_state(logger, lat, lon, altitude, battery):
+    logger.info(
+        f"STATE | lat={lat} lon={lon} alt={altitude}m battery={battery}%"
+    )
+
+def change_drone_state(logger, old_state,state):
+    logger.info(f"CHANGING DRONE STATE | {old_state} -> {state}")
+    return state
 
 def get_data(capteurs = ["camera_rgb", "camera_thermique", "gps", "sms"]):
     data = {}
@@ -44,12 +53,33 @@ def main():
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
-    config_json_path = "config.json"
-    config = json.load(open(config_json_path))
+
+    try:
+        os.remove(r"..\logs\drone.log")
+        logging.basicConfig(
+            filename=r"..\logs\drone.log",
+            level=logging.INFO,
+            format="%(asctime)s | %(levelname)s | %(message)s"
+        )
+    except Exception as e:
+        logging.error(f"FATAL ERROR | \n{e}")
+        exit()
+
+    logger = logging.getLogger()
+
+    logger.info("DEBUT DE MISSION")
+
+    try :
+        config_json_path = "config.json"
+        config = json.load(open(config_json_path))
+    except Exception as e:
+        logger.error(f"FATAL ERROR | \n{e}")
+        exit()
 
     current_map = topography.Map(config)
 
-    state = 11
+    state = change_drone_state(logger, None, 11)
+    start_time = time.time()
 
     running = True
 
@@ -57,6 +87,9 @@ def main():
 
         match state:
             case 11:
+                for i in range(10):
+                    log_state(logger, i, i, i, 100)
+                running = False
                 # au sol
                 pass
             case 12:
@@ -82,12 +115,14 @@ def main():
             case _:
                 print("Etat inconnu")
 
+    logger.info("FIN DE MISSION")
+
 
 
 
 
 if __name__ == "__main__":
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    """BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
     config_json_path = "config.json"
     config = json.load(open(config_json_path))
@@ -96,4 +131,6 @@ if __name__ == "__main__":
 
     #test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
-    test.astar_comparaison(current_map, 4)
+    test.astar_comparaison(current_map, 4)"""
+
+    main()
