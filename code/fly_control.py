@@ -1,11 +1,11 @@
 import heapq
 import numpy as np
 
-def get_cost(a, b):
+def heuristic(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
 
-def heuristic(current_map, current_node, neighbor_node, penalty):
+def get_cost(current_map, current_node, neighbor_node, penalty):
     """
     Calcule le coût de déplacement : Coût de distance + Pénalité d'altitude.
     Coût de distance de base (1.0 pour orthogonal, 1.414 pour diagonal)
@@ -37,7 +37,7 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
     
     came_from = {} # Pour reconstruire le chemin
     g_score = {start_node: 0} # Coût du départ au nœud actuel
-    f_score = {start_node: heuristic(current_map, start_node, end_node, penalty)} # Estimation totale
+    f_score = {start_node: heuristic(start_node, end_node)} # Estimation totale
 
     while open_set:
         # Récupérer le nœud avec le f_score le plus bas
@@ -52,13 +52,13 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
             neighbor = (current[0] + dr, current[1] + dc)
 
             if current_map.is_valid(neighbor[0], neighbor[1]):
-                tentative_g_score = g_score[current] + get_cost(current, neighbor)
+                tentative_g_score = g_score[current] + get_cost(current_map, current, neighbor, penalty)
 
                 if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
                     # Ce chemin est le meilleur trouvé jusqu'à présent
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + heuristic(current_map, neighbor, end_node, penalty)
+                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, end_node)
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
     return None # Aucun chemin trouvé
