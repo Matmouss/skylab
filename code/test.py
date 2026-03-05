@@ -93,3 +93,30 @@ def astar(current_map, nb_paths):
             )
         else:
             print("Erreur : Aucun chemin valide trouvé. Vérifiez si les points sont bien dans la zone autorisée.")
+
+
+def astar_comparaison(current_map, n = 1):
+    paths = []
+    start_pt = polygon_random_points(current_map)
+    end_pt = polygon_random_points(current_map)
+
+    start_proj = current_map.convert_coords(*start_pt)
+    end_proj = current_map.convert_coords(*end_pt)
+
+    for i in range(n):
+
+        print(f"Coordonnées projetées Départ : {start_proj}, Dans la zone : {current_map.in_map_shape(*start_proj)}")
+        print(f"Coordonnées projetées Arrivée : {end_proj}, Dans la zone : {current_map.in_map_shape(*end_proj)}")
+
+        # Calcul de la trajectoire optimale via l'algorithme A*
+        path = fly_control.astar(current_map, start_pt, end_pt)
+
+        if path:
+            print(f"Succès : Chemin trouvé avec {len(path)} waypoints.")
+            paths.append(path)
+        else:
+            print("Erreur : Aucun chemin valide rencontré. Vérifiez si les points sont bien dans la zone autorisée.")
+            paths.append([])
+    
+    print(len(paths))
+    graphics.mutliplot_path(current_map, paths)

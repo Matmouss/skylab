@@ -2,9 +2,6 @@ import heapq
 import numpy as np
 
 def heuristic(a, b):
-    """
-    Calcule la distance euclidienne entre deux points (Estimation heuristique).
-    """
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
 
@@ -25,19 +22,16 @@ def astar(current_map, start_lon_lat, end_lon_lat):
     """
     Exécute l'algorithme A* pour trouver le chemin optimal entre deux points GPS.
     """
-    # Conversion : (Lon, Lat) -> Coordonnées projetées -> Indices de matrice (row, col)
     start_proj = current_map.convert_coords(*start_lon_lat)
     end_proj = current_map.convert_coords(*end_lon_lat)
     
     start_node = current_map.dataset.index(*start_proj)
     end_node = current_map.dataset.index(*end_proj)
 
-    # Vérification initiale de validité du départ et de l'arrivée
     if not current_map.is_valid(*start_node) or not current_map.is_valid(*end_node):
         print("Erreur : Le départ ou l'arrivée se situe en zone interdite (altitude ou hors zone).")
         return None
 
-    # Initialisation de la file de priorité (Open Set)
     open_set = []
     heapq.heappush(open_set, (0, start_node))
     
@@ -75,10 +69,8 @@ def reconstruct_path(current_map, came_from, current):
     """
     path = []
     while current in came_from:
-        # Convertir les indices de matrice en (Lon, Lat)
         lon_lat = current_map.dataset.xy(current[0], current[1])
         path.append(lon_lat)
         current = came_from[current]
     
-    # Inverser pour avoir le chemin du départ vers l'arrivée
     return path[::-1]

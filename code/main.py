@@ -10,4 +10,5 @@ if __name__ == "__main__":
     current_map = topography.Map(config)
 
     #test.carte_et_points(current_map, 500)
-    test.astar(current_map,10)
+    #test.astar(current_map,1)
+    test.astar_comparaison(current_map, 3)
