@@ -83,12 +83,13 @@ def main():
     lat, lon = 0, 0
     altitude = 0 # hors test mentionner l'altitude réelle de départ
 
+    current_path = []
+    running_subprocess = []
+
     running = True
 
     while running:
-
-        try :
-
+        try:
             match state:
                 case 11:
                     for i in range(10):
@@ -120,20 +121,12 @@ def main():
                     print("Etat inconnu")
 
         except Exception as e:
-
             logger.critical(f"loop crash: {e}", exc_info=True)
-
             #emergency_procedure()
-
             #reset_system_state()
-
             state = change_drone_state(logger, state, 40)
 
     logger.info("FIN DE MISSION")
-
-
-
-
 
 if __name__ == "__main__":
     """BASE_DIR = os.path.dirname(os.path.abspath(__file__))
