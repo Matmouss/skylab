@@ -103,7 +103,7 @@ def boucle_principale(current_map, start_node, targets, penalty):
         else:
             remaining_targets.remove(next_target)
 
-    # --- PHASE RETOUR  ---
+    # --- PHASE RETOUR (回程: 从最后一个点回到起点A) ---
     print(f"Planification du retour : {current_pos} -> {start_node}")
     retour_path = astar(current_map, current_pos, start_node, penalty)
 
