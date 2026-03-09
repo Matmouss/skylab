@@ -74,3 +74,37 @@ def reconstruct_path(current_map, came_from, current):
         current = came_from[current]
     
     return path[::-1]
+
+def boucle_principale(current_map, start_node, targets, penalty):
+    """
+    Planifie le trajet multi-points et le retour au départ.
+    """
+    aller_path = [] 
+    retour_path = [] 
+    current_pos = start_node
+    remaining_targets = targets.copy()
+
+    # --- PHASE ALLER  ---
+    while remaining_targets:
+        next_target = min(remaining_targets, 
+                          key=lambda t: heuristic(
+                              current_map.convert_coords(*current_pos), 
+                              current_map.convert_coords(*t)
+                          ))
+        
+        segment = astar(current_map, current_pos, next_target, penalty)
+        if segment:
+            if not aller_path:
+                aller_path.extend(segment)
+            else:
+                aller_path.extend(segment[1:])
+            current_pos = next_target
+            remaining_targets.remove(next_target)
+        else:
+            remaining_targets.remove(next_target)
+
+    # --- PHASE RETOUR  ---
+    print(f"Planification du retour : {current_pos} -> {start_node}")
+    retour_path = astar(current_map, current_pos, start_node, penalty)
+
+    return aller_path, retour_path
