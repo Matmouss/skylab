@@ -194,7 +194,6 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.legend(loc='upper right')
     plt.show()
 
-
 def mutliplot_path(current_map, paths, titles):
     fig, axs = plt.subplots(
     len(paths),
