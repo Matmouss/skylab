@@ -126,12 +126,9 @@ def astar_comparaison(current_map, n = 1):
             titles.append(f"Penalty : {penaltys[i]}")
     
     print(len(paths))
-    graphics.mutli_points_plot_path(current_map, paths)
     graphics.mutliplot_path(current_map, paths, titles)
     
-def main_temp():
-    config = json.load(open("config.json"))
-    current_map = topography.Map(config)
+def main_temp(current_map):
 
     try:
         print("Génération des points de mission...")
@@ -202,7 +199,13 @@ def main_temp():
             data_before=data_avant,
             data_after=data_apres
         )
+        
+        
         test.astar_comparaison(current_map, n = 3)
+
+
+
+
             
     except Exception as e:
         print(f"Erreur lors de la mission : {e}")

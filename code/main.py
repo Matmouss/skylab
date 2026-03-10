@@ -131,15 +131,19 @@ def main():
     logger.info("FIN DE MISSION")
 
 if __name__ == "__main__":
-    """BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
     config_json_path = "config.json"
     config = json.load(open(config_json_path))
 
+
+
     current_map = topography.Map(config)
 
-    #test.carte_et_points(current_map, 500)
+    """#test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
     test.astar_comparaison(current_map, 4)"""
 
-    main()
+    #main()
+
+    test.main_temp(current_map)
