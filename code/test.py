@@ -1,4 +1,4 @@
-import graphics, random, fly_control
+import graphics, random, fly_control, json, topography, test
 import numpy as np
 import random
 
@@ -130,7 +130,7 @@ def astar_comparaison(current_map, n = 1):
     graphics.mutliplot_path(current_map, paths, titles)
     
 def main_temp():
-  config = json.load(open("config.json"))
+    config = json.load(open("config.json"))
     current_map = topography.Map(config)
 
     try:
