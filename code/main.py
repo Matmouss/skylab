@@ -46,8 +46,10 @@ def main():
     14 : en vol
     15 : scan local
     ...
-    40 : urgence indéterminée
-    41 : retour d'urgence
+    40 : erreur indéterminée
+    ...
+    71 : retour d'urgence
+    72 : attétrissage d'urgence
 
     """
 
