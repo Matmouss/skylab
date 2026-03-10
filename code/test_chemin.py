@@ -67,7 +67,7 @@ def test_random_path():
             print(f"Succès ! Chemin trouvé avec {len(path)} waypoints.")
             
             # Visualisation 2D sur la carte
-            graphics.map_plot(
+            graphics.map_mutli_points_plot(
                 current_map.dataset, 
                 config["map_shape"], 
                 points_in_shape=path, 

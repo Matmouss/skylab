@@ -11,7 +11,7 @@ def polygon_random_points (current_map):
 
 def generic_test(current_map):
 
-    graphics.map_plot(current_map.dataset, current_map.map_shape)
+    graphics.map_mutli_points_plot(current_map.dataset, current_map.map_shape)
     """
     méthodes d'affihage
 
@@ -39,7 +39,7 @@ def carte_et_points(current_map, nb_points):
         else:
             points_out_shape.append((x, y))
 
-    graphics.map_plot(current_map.dataset, current_map.map_shape, points_in_shape, points_out_shape)
+    graphics.map_mutli_points_plot(current_map.dataset, current_map.map_shape, points_in_shape, points_out_shape)
 
 def astar(current_map, nb_paths):
     for i in range(nb_paths):
@@ -58,7 +58,7 @@ def astar(current_map, nb_paths):
         if path:
             print(f"Succès : Chemin trouvé avec {len(path)} waypoints.")
             
-            graphics.map_plot(
+            graphics.map_mutli_points_plot(
                 dataset=current_map.dataset, 
                 map_shape=current_map.map_shape, 
                 points_in_shape=path,
@@ -123,4 +123,4 @@ def astar_comparaison(current_map, n = 1):
             paths.append([])
     
     print(len(paths))
-    graphics.mutliplot_path(current_map, paths)
+    graphics.mutli_points_plot_path(current_map, paths)

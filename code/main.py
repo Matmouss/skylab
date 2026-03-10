@@ -1,4 +1,4 @@
-import topography, fly_control, os, json, graphics
+import topography, fly_control, os, json, graphics,test
 import numpy as np
 
 if __name__ == "__main__":
@@ -71,12 +71,13 @@ if __name__ == "__main__":
         }
 
         print("\nAffichage du comparatif (Retour en NOIR)...")
-        graphics.map_plot_compare(
+        graphics.map_mutli_points_plot_compare(
             dataset=current_map.dataset, 
             map_shape=current_map.map_shape, 
             data_before=data_avant,
             data_after=data_apres
         )
+        test.astar_comparaison(current_map, n = 3)
             
     except Exception as e:
         print(f"Erreur lors de la mission : {e}")
