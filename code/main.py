@@ -57,7 +57,7 @@ def main():
     os.chdir(BASE_DIR)
 
     try:
-        os.remove(r"..\logs\drone.log")
+        os.remove("../logs/drone.log")
         logging.basicConfig(
             filename=r"..\logs\drone.log",
             level=logging.INFO,
@@ -131,6 +131,7 @@ def main():
     logger.info("FIN DE MISSION")
 
 if __name__ == "__main__":
+    """
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
     config_json_path = "config.json"
@@ -140,10 +141,12 @@ if __name__ == "__main__":
 
     current_map = topography.Map(config)
 
-    """#test.carte_et_points(current_map, 500)
+    #test.main_temp(current_map)
+
+    #test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
     test.astar_comparaison(current_map, 4)"""
 
-    #main()
+    main()
 
-    test.main_temp(current_map)
+    
