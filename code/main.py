@@ -26,33 +26,7 @@ def get_data(capteurs = ["camera_rgb", "camera_thermique", "gps", "sms"]):
 def send_data(data):
     print(data)
 
-
-def main():
-    """
-    La boucle principale du drone
-
-    étapes pour un état normal : 
-            # récupération des données
-
-            # traitement des données
-
-            # Réaction et planification
-
-    différents états :
-    10 : fin de mission
-    11 : au sol
-    12 : décollage
-    13 : atterrissage
-    14 : en vol
-    15 : scan local
-    ...
-    40 : erreur indéterminée
-    ...
-    71 : retour d'urgence
-    72 : attétrissage d'urgence
-
-    """
-
+def init_drone():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
@@ -84,6 +58,32 @@ def main():
     start_time = time.time()
     lat, lon = 0, 0
     altitude = 0 # hors test mentionner l'altitude réelle de départ
+
+def main_loop(current_map, state, start_time, lat, lon, altitude):
+    """
+    La boucle principale du drone
+
+    étapes pour un état normal : 
+            # récupération des données
+
+            # traitement des données
+
+            # Réaction et planification
+
+    différents états :
+    10 : fin de mission
+    11 : au sol
+    12 : décollage
+    13 : atterrissage
+    14 : en vol
+    15 : scan local
+    ...
+    40 : erreur indéterminée
+    ...
+    71 : retour d'urgence
+    72 : attétrissage d'urgence
+
+    """
 
     current_path = []
     running_subprocess = []
@@ -147,6 +147,6 @@ if __name__ == "__main__":
     #test.astar(current_map,1)
     test.astar_comparaison(current_map, 4)"""
 
-    main()
+    init_drone()
 
     
