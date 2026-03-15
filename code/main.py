@@ -30,10 +30,12 @@ def init_drone():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    try:
+    try: 
         os.remove("../logs/drone.log")
+    except: pass
+    try:
         logging.basicConfig(
-            filename=r"..\logs\drone.log",
+            filename=r"../logs/drone.log",
             level=logging.INFO,
             format="%(asctime)s | %(levelname)s | %(message)s"
         )
