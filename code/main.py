@@ -61,7 +61,10 @@ def init_drone():
     lat, lon = 0, 0
     altitude = 0 # hors test mentionner l'altitude réelle de départ
 
-def main_loop(current_map, state, start_time, lat, lon, altitude):
+    main_loop(current_map, state, start_time, lat, lon, altitude, logger)
+
+
+def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
     """
     La boucle principale du drone
 
