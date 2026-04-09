@@ -95,29 +95,33 @@ def mutli_points_plot_path(current_map, paths):
     fig, axs = plt.subplots(len(paths), 2, squeeze=False, figsize=(14, 4*len(paths)))
     dataset = current_map.dataset
     full_img = dataset.read(1)
+    
     for i, path in enumerate(paths):
+        # 左侧：地图
         pixels = [dataset.index(lon, lat) for lon, lat in current_map.map_shape]
-        rows, cols = [p[0] for p in pixels], [p[1] for p in pixels]
-        axs[i, 0].plot(cols, rows, color='cyan', linewidth=2, zorder=2)
+        axs[i, 0].plot([p[1] for p in pixels], [p[0] for p in pixels], color='cyan', linewidth=2)
+        
         pixels_in = [dataset.index(lon, lat) for lon, lat in path]
-        rows_in, cols_in = [p[0] for p in pixels_in], [p[1] for p in pixels_in]
-        axs[i, 0].plot(cols_in, rows_in, color='#00FF00', linewidth=1.2, zorder=3)
+        axs[i, 0].plot([p[1] for p in pixels_in], [p[0] for p in pixels_in], color='#00FF00', linewidth=1.2, marker='.')
         axs[i, 0].imshow(full_img, cmap='gray')
         
+        # 右侧：高度剖面
+        # 这里移除原有的 n=10 循环采样，改为点对点直接提取
         fly_path = np.array([current_map.get_fly_height(*pt) for pt in path])
-        n = 10
-        heigth_array = []
-        for k in range(len(path) - 1):
-            x = np.linspace(path[k][0], path[k + 1][0], n, endpoint=False)
-            y = np.linspace(path[k][1], path[k + 1][1], n, endpoint=False)
-            for j in range(n):
-                heigth_array.append(current_map.get_elevation(x[j], y[j]))
-        heigth_array.append(current_map.get_elevation(path[-1][0], path[-1][1]))
-        heigth_array = np.array(heigth_array)
-        fly_array_x = np.arange(len(path)) * n
-        axs[i, 1].plot(heigth_array, label='Terrain', alpha=0.4)
-        axs[i, 1].plot(fly_array_x, fly_path, label='Flight Plan')
+        terrain_h = np.array([current_map.get_elevation(*pt) for pt in path])
+        
+        x_axis = np.arange(len(path))
+        
+        axs[i, 1].plot(x_axis, terrain_h, label='Terrain', color='brown', alpha=0.4)
+        axs[i, 1].plot(x_axis, fly_path, label='Flight Plan (Simplified)', color='blue', linewidth=2)
+        
+        # 填充安全区间
+        axs[i, 1].fill_between(x_axis, terrain_h + current_map.max_tree_height + current_map.security_height, 
+                               terrain_h, color="skyblue", alpha=0.3)
+        
+        axs[i, 1].set_title(f"Route {i+1} Elevation Control")
         axs[i, 1].legend(loc='upper right')
+        
     plt.tight_layout()
     plt.show()
 
@@ -193,67 +197,78 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.axhline(y=max_fly_height, color='r', label='max_fly_height')
     plt.legend(loc='upper right')
     plt.show()
-
 def mutliplot_path(current_map, paths, titles):
     fig, axs = plt.subplots(
-    len(paths),
-    2,
-    squeeze=False,
-    figsize=(12, 4*len(paths)),
-    gridspec_kw={"width_ratios": [1.8, 3]}  # gauche plus large
+        len(paths), 2, squeeze=False,
+        figsize=(12, 4*len(paths)),
+        gridspec_kw={"width_ratios": [1.8, 3]}
     )
     dataset = current_map.dataset
     full_img = dataset.read(1)
+    n_interp = 20
 
     for i, path in enumerate(paths):
-        # carte
+        # --- 左图 ---
         pixels = [dataset.index(lon, lat) for lon, lat in current_map.map_shape]
-        rows = [p[0] for p in pixels]
-        cols = [p[1] for p in pixels]
-        axs[i, 0].plot(cols, rows, color='cyan', linewidth=2, label='Mission Boundary', zorder=2)
-
+        axs[i, 0].plot([p[1] for p in pixels], [p[0] for p in pixels], color='cyan', linewidth=2)
         pixels_in = [dataset.index(lon, lat) for lon, lat in path]
-        rows_in = [p[0] for p in pixels_in]
-        cols_in = [p[1] for p in pixels_in]
-        axs[i, 0].plot(cols_in, rows_in, color='#00FF00', linewidth=1.5,
-                       marker='o', markersize=3, label='Flight Path', zorder=3)
+        axs[i, 0].plot([p[1] for p in pixels_in], [p[0] for p in pixels_in],
+                       color='#00FF00', linewidth=1.5, marker='o', markersize=3)
+        axs[i, 0].imshow(full_img, cmap='gray')
+        axs[i, 0].set_title(f"Map View {i+1}")
+        axs[i, 0].set_xticks([])
+        axs[i, 0].set_yticks([])
 
-        axs[i, 0].set_title(f"A* Visualization {i+1}")
-        im = axs[i, 0].imshow(full_img, cmap='gray')
-        #fig.colorbar(im, ax=axs[i, 0], label='Elevation (m)')
-        axs[i, 0].legend(loc='upper right')
-        axs[i,0].set_xticks([])
-        axs[i,0].set_yticks([])
+        # --- 右图：地形与飞行高度都做插值 ---
+        terrain_interp = []
+        fly_interp = []
+        x_interp = []
+        total_idx = 0
 
-        # profil
-        fly_path = np.array([current_map.get_fly_height(*pt) for pt in path])
-
-        n = 1
-        heigth_array = []
         for k in range(len(path) - 1):
-            x = np.linspace(path[k][0], path[k + 1][0], n, endpoint=False)
-            y = np.linspace(path[k][1], path[k + 1][1], n, endpoint=False)
-            for j in range(n):
-                heigth_array.append(current_map.get_elevation(x[j], y[j]))
+            xs = np.linspace(path[k][0], path[k+1][0], n_interp, endpoint=False)
+            ys = np.linspace(path[k][1], path[k+1][1], n_interp, endpoint=False)
 
-        heigth_array.append(current_map.get_elevation(path[-1][0], path[-1][1]))
-        heigth_array = np.array(heigth_array)
+            h_start = current_map.get_fly_height(*path[k])
+            h_end   = current_map.get_fly_height(*path[k+1])
 
-        fly_array_x = np.arange(len(path)) * n
+            for j in range(n_interp):
+                terrain_interp.append(current_map.get_elevation(xs[j], ys[j]))
 
-        axs[i, 1].plot(heigth_array, label='terrain height', alpha=0.4)
-        axs[i, 1].plot(fly_array_x, fly_path, label='flight plan')
-        axs[i, 1].plot(current_map.max_tree_height + heigth_array, color="darkgreen",
-                       label='terrain + tree', alpha=0.4)
-        axs[i, 1].fill_between(
-            range(len(heigth_array)),
-            current_map.max_tree_height + current_map.security_height + heigth_array,
-            color="skyblue", alpha=0.4, label='terrain + tree + security'
-        )
-        axs[i, 1].axhline(y=current_map.max_fly_height, color='r', label='max_fly_height')
-        axs[i, 1].set_title(f"Profil {i+1} : {len(path)} points | {titles[i]}")
-        axs[i, 1].legend(loc='upper right')
-        axs[i,1].set_xticks([])
+                t = j / n_interp
+                linear_h  = h_start * (1 - t) + h_end * t
+                min_safe_h = current_map.get_fly_height(xs[j], ys[j])
+                fly_interp.append(max(linear_h, min_safe_h))
+
+                x_interp.append(total_idx + j / n_interp)
+            total_idx += 1
+
+        # 终点
+        terrain_interp.append(current_map.get_elevation(*path[-1]))
+        fly_interp.append(current_map.get_fly_height(*path[-1]))
+        x_interp.append(total_idx)
+
+        terrain_interp = np.array(terrain_interp)
+        fly_interp     = np.array(fly_interp)
+        x_interp       = np.array(x_interp)
+
+        tree_limit   = terrain_interp + current_map.max_tree_height
+        safety_limit = tree_limit + current_map.security_height
+
+        axs[i, 1].fill_between(x_interp, terrain_interp, tree_limit,  color="green",   alpha=0.2, label='Trees')
+        axs[i, 1].fill_between(x_interp, tree_limit, safety_limit,    color="skyblue", alpha=0.3, label='Safety Margin')
+        axs[i, 1].plot(x_interp, terrain_interp, color='gray',  alpha=0.6, linewidth=1, label='Terrain')
+        axs[i, 1].plot(x_interp, fly_interp,     color='blue',  linewidth=2,            label='Flight Plan')
+
+        # waypoint 标记点
+        fly_waypoints = [current_map.get_fly_height(*pt) for pt in path]
+        axs[i, 1].scatter(np.arange(len(path)), fly_waypoints, color='blue', s=20, zorder=5)
+
+        axs[i, 1].axhline(y=current_map.max_fly_height, color='red', linestyle='--', alpha=0.7, label='Max Altitude')
+        axs[i, 1].set_title(f"Profile {i+1} : {len(path)} Waypoints | {titles[i]}")
+        axs[i, 1].legend(loc='upper right', fontsize='xx-small')
+        axs[i, 1].set_xlabel("Waypoint Index")
+        axs[i, 1].set_ylabel("Elevation (m)")
+
     plt.tight_layout()
     plt.show()
-  

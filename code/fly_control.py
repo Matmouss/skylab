@@ -1,6 +1,8 @@
 import heapq
 import numpy as np
 
+EPSILON_ALTITUDE = 0.1
+
 def heuristic(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
@@ -17,7 +19,6 @@ def get_cost(current_map, current_node, neighbor_node, penalty):
     elevation_penalty = elevation * penalty
     
     return dist + elevation_penalty
-
 def astar(current_map, start_lon_lat, end_lon_lat, penalty):
     """
     Exécute l'algorithme A* pour trouver le chemin optimal entre deux points GPS.
@@ -35,19 +36,17 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
     open_set = []
     heapq.heappush(open_set, (0, start_node))
     
-    came_from = {} # Pour reconstruire le chemin
-    g_score = {start_node: 0} # Coût du départ au nœud actuel
-    f_score = {start_node: heuristic(start_node, end_node)} # Estimation totale
+    came_from = {}
+    g_score = {start_node: 0}
+    f_score = {start_node: heuristic(start_node, end_node)}
 
     while open_set:
-        # Récupérer le nœud avec le f_score le plus bas
         current = heapq.heappop(open_set)[1]
 
-        # Vérifier si l'objectif est atteint
         if current == end_node:
-            return reconstruct_path(current_map, came_from, current)
+            raw_path = reconstruct_path(current_map, came_from, current)
+            return smooth_path_by_elevation(current_map, raw_path, epsilon=EPSILON_ALTITUDE)
 
-        # Exploration des 8 voisins (horizontaux, verticaux et diagonaux)
         for dr, dc in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (-1,1), (1,-1), (1,1)]:
             neighbor = (current[0] + dr, current[1] + dc)
 
@@ -55,36 +54,63 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
                 tentative_g_score = g_score[current] + get_cost(current_map, current, neighbor, penalty)
 
                 if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-                    # Ce chemin est le meilleur trouvé jusqu'à présent
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g_score
                     f_score[neighbor] = tentative_g_score + heuristic(neighbor, end_node)
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-    return None # Aucun chemin trouvé
+    return None
 
 def reconstruct_path(current_map, came_from, current):
-    """
-    Reconstruit le chemin du but vers le départ et le convertit en coordonnées GPS.
-    """
     path = []
     while current in came_from:
         lon_lat = current_map.dataset.xy(current[0], current[1])
         path.append(lon_lat)
         current = came_from[current]
     
+    # 加入起点
+    lon_lat = current_map.dataset.xy(current[0], current[1])
+    path.append(lon_lat)
+    
     return path[::-1]
 
+def smooth_path_by_elevation(current_map, path, epsilon=3.0, max_step=20):
+    """
+    保留：起点、终点、高度极值点、以及每隔 max_step 个点强制保留一个
+    """
+    if len(path) <= 2:
+        return path
+
+    heights = [current_map.get_fly_height(*pt) for pt in path]
+    
+    simplified_path = [path[0]]
+    last_kept_idx = 0
+
+    for i in range(1, len(path) - 1):
+        prev_h = heights[i-1]
+        curr_h = heights[i]
+        next_h = heights[i+1]
+
+        is_peak = (curr_h > prev_h + epsilon) and (curr_h > next_h + epsilon)
+        is_valley = (curr_h < prev_h - epsilon) and (curr_h < next_h - epsilon)
+        
+        # 强制每隔 max_step 个点保留一个，防止路径退化为直线
+        is_forced = (i - last_kept_idx) >= max_step
+
+        if is_peak or is_valley or is_forced:
+            simplified_path.append(path[i])
+            last_kept_idx = i
+            
+    simplified_path.append(path[-1])
+    
+    return simplified_path
+
 def boucle_principale(current_map, start_node, targets, penalty):
-    """
-    Planifie le trajet multi-points et le retour au départ.
-    """
     aller_path = [] 
     retour_path = [] 
     current_pos = start_node
     remaining_targets = targets.copy()
 
-    # --- PHASE ALLER  ---
     while remaining_targets:
         next_target = min(remaining_targets, 
                           key=lambda t: heuristic(
@@ -92,19 +118,29 @@ def boucle_principale(current_map, start_node, targets, penalty):
                               current_map.convert_coords(*t)
                           ))
         
+        # ✅ 修复：先调用 astar 获取 segment，再做平滑
         segment = astar(current_map, current_pos, next_target, penalty)
+
         if segment:
+            segment = smooth_path_by_elevation(current_map, segment, epsilon=EPSILON_ALTITUDE)
+            
             if not aller_path:
                 aller_path.extend(segment)
             else:
                 aller_path.extend(segment[1:])
+            
             current_pos = next_target
             remaining_targets.remove(next_target)
         else:
             remaining_targets.remove(next_target)
 
-    # --- PHASE RETOUR (回程: 从最后一个点回到起点A) ---
+    # PHASE RETOUR
     print(f"Planification du retour : {current_pos} -> {start_node}")
-    retour_path = astar(current_map, current_pos, start_node, penalty)
+    segment_retour = astar(current_map, current_pos, start_node, penalty)
+    
+    if segment_retour:
+        retour_path = smooth_path_by_elevation(current_map, segment_retour, epsilon=EPSILON_ALTITUDE)
+    else:
+        retour_path = []
 
     return aller_path, retour_path

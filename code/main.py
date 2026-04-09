@@ -136,7 +136,7 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
     logger.info("FIN DE MISSION")
 
 if __name__ == "__main__":
-    """
+    
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
     config_json_path = "config.json"
@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     #test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
-    test.astar_comparaison(current_map, 4)"""
+    test.astar_comparaison(current_map, 3)
 
     init_drone()
 
