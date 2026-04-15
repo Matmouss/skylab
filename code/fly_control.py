@@ -1,7 +1,7 @@
 import heapq
 import numpy as np
 
-EPSILON_ALTITUDE = 0.1
+EPSILON_ALTITUDE = 0.05
 
 def heuristic(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)

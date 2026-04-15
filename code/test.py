@@ -172,11 +172,13 @@ def main_temp(current_map):
         }
 
         print("\nAffichage du comparatif (Retour en NOIR)...")
+        # test.py 示例
         graphics.map_mutli_points_plot_compare(
-            dataset=current_map.dataset,
-            map_shape=current_map.map_shape,
-            data_before=data_avant,
-            data_after=data_apres
+            current_map.dataset, 
+            current_map.map_shape, 
+            data_avant, 
+            data_apres,
+            current_map  # 必须传这个，否则无法计算高度
         )
 
         test.astar_comparaison(current_map, n=3)
