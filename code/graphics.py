@@ -364,79 +364,240 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.show()
 
 def mutliplot_path(current_map, paths, titles):
+    """
+    Affiche pour chaque trajet :
+      - Colonne gauche  : vue carte (image + tracé)
+      - Colonne droite  : profil d'altitude en fonction de la DISTANCE réelle (mètres)
+
+    Interactivité :
+      - En survolant le profil (droite), un marqueur croisé apparaît sur la carte (gauche)
+        à la position correspondante du drone.
+      - En survolant la carte (gauche), une ligne verticale suit la distance sur le profil.
+    """
+    matplotlib.use('TkAgg')   # assure un backend interactif ; à commenter si déjà défini
+
+    n_rows = len(paths)
     fig, axs = plt.subplots(
-        len(paths), 2, squeeze=False,
-        figsize=(12, 4*len(paths)),
-        gridspec_kw={"width_ratios": [1.8, 3]}
+        n_rows, 2, squeeze=False,
+        figsize=(14, 5 * n_rows),
+        gridspec_kw={"width_ratios": [1.6, 3]}
     )
-    dataset = current_map.dataset
-    full_img = dataset.read(1)
-    n_interp = 20
+    fig.patch.set_facecolor('#1a1a2e')
+
+    dataset    = current_map.dataset
+    full_img   = dataset.read(1)
+    n_interp   = 30   # échantillons par segment pour le profil
+
+    # Stocke les données par ligne pour les callbacks
+    row_data = []
 
     for i, path in enumerate(paths):
-        # --- 左图 ---
-        pixels = [dataset.index(lon, lat) for lon, lat in current_map.map_shape]
-        axs[i, 0].plot([p[1] for p in pixels], [p[0] for p in pixels], color='cyan', linewidth=2)
-        pixels_in = [dataset.index(lon, lat) for lon, lat in path]
-        axs[i, 0].plot([p[1] for p in pixels_in], [p[0] for p in pixels_in],
-                       color='#00FF00', linewidth=1.5, marker='o', markersize=3)
-        axs[i, 0].imshow(full_img, cmap='gray')
-        axs[i, 0].set_title(f"Map View {i+1}")
-        axs[i, 0].set_xticks([])
-        axs[i, 0].set_yticks([])
+        if not path:
+            row_data.append(None)
+            continue
 
-        # --- 右图：地形与飞行高度都做插值 ---
-        terrain_interp = []
-        fly_interp = []
-        x_interp = []
-        total_idx = 0
+        ax_map  = axs[i, 0]
+        ax_prof = axs[i, 1]
+
+        # ── Couleurs ──────────────────────────────────────────────────
+        C_BOUND  = '#00e5ff'
+        C_PATH   = '#76ff03'
+        C_PROF   = '#448aff'
+        C_TERRAIN= '#9e9e9e'
+
+        # ── Gauche : carte ────────────────────────────────────────────
+        ax_map.imshow(full_img, cmap='gray', alpha=0.85)
+        boundary_px = [dataset.index(lon, lat) for lon, lat in current_map.map_shape]
+        ax_map.plot(
+            [p[1] for p in boundary_px] + [boundary_px[0][1]],
+            [p[0] for p in boundary_px] + [boundary_px[0][0]],
+            color=C_BOUND, linewidth=1.8, zorder=2
+        )
+        path_px = [dataset.index(pt[0], pt[1]) for pt in path]
+        ax_map.plot(
+            [p[1] for p in path_px], [p[0] for p in path_px],
+            color=C_PATH, linewidth=1.6, zorder=3
+        )
+        # Waypoints
+        ax_map.scatter(
+            [p[1] for p in path_px], [p[0] for p in path_px],
+            color=C_PATH, s=18, zorder=4
+        )
+        # Départ (vert) / Arrivée (rouge)
+        ax_map.scatter(path_px[0][1],  path_px[0][0],  color='lime',  s=60, zorder=5, label='Départ')
+        ax_map.scatter(path_px[-1][1], path_px[-1][0], color='red',   s=60, zorder=5, label='Arrivée')
+        ax_map.set_title(f"Carte – trajet {i+1}", color='white', fontsize=9)
+        ax_map.set_xticks([]); ax_map.set_yticks([])
+        ax_map.legend(loc='upper left', fontsize=7, facecolor='#222', labelcolor='white',
+                      bbox_to_anchor=(0.0, 1.0), borderaxespad=0)
+        ax_map.set_facecolor('#111')
+
+        # ── Zoom automatique sur le tracé (+ marge 20 %) ──────────────
+        all_cols = [p[1] for p in path_px] + [p[1] for p in boundary_px]
+        all_rows = [p[0] for p in path_px] + [p[0] for p in boundary_px]
+        c_min, c_max = min(all_cols), max(all_cols)
+        r_min, r_max = min(all_rows), max(all_rows)
+        margin_c = max((c_max - c_min) * 0.20, 10)
+        margin_r = max((r_max - r_min) * 0.20, 10)
+        ax_map.set_xlim(c_min - margin_c, c_max + margin_c)
+        ax_map.set_ylim(r_max + margin_r, r_min - margin_r)  # axe Y inversé pour imshow
+
+        # ── Calcul distance cumulée (coordonnées projetées → mètres) ──
+        # Les coordonnées stockées dans path sont déjà en CRS projeté (mètres)
+        cum_dist = [0.0]
+        for k in range(1, len(path)):
+            p1 = np.array(path[k - 1])
+            p2 = np.array(path[k])
+            cum_dist.append(cum_dist[-1] + float(np.linalg.norm(p2 - p1)))
+        cum_dist = np.array(cum_dist)
+
+        # ── Interpolation dense du profil ─────────────────────────────
+        x_dist, y_terrain, y_fly = [], [], []
+        # Aussi stocker les coordonnées interpolées pour le repère carte
+        interp_coords = []
 
         for k in range(len(path) - 1):
-            xs = np.linspace(path[k][0], path[k+1][0], n_interp, endpoint=False)
-            ys = np.linspace(path[k][1], path[k+1][1], n_interp, endpoint=False)
-
-            h_start = current_map.get_fly_height(*path[k])
-            h_end   = current_map.get_fly_height(*path[k+1])
-
+            p_s = np.array(path[k]);     p_e = np.array(path[k + 1])
+            d_s = cum_dist[k];           d_e = cum_dist[k + 1]
             for j in range(n_interp):
-                terrain_interp.append(current_map.get_elevation(xs[j], ys[j]))
+                r = j / n_interp
+                pt  = p_s + r * (p_e - p_s)
+                dist = d_s + r * (d_e - d_s)
+                x_dist.append(dist)
+                y_terrain.append(current_map.get_elevation(pt[0], pt[1]))
 
-                t = j / n_interp
-                linear_h  = h_start * (1 - t) + h_end * t
-                min_safe_h = current_map.get_fly_height(xs[j], ys[j])
-                fly_interp.append(max(linear_h, min_safe_h))
+                h_lin  = current_map.get_fly_height(*p_s) * (1 - r) + current_map.get_fly_height(*p_e) * r
+                h_safe = current_map.get_fly_height(pt[0], pt[1])
+                y_fly.append(max(h_lin, h_safe))
+                interp_coords.append((pt[0], pt[1]))
 
-                x_interp.append(total_idx + j / n_interp)
-            total_idx += 1
+        # Dernier point
+        x_dist.append(float(cum_dist[-1]))
+        y_terrain.append(current_map.get_elevation(*path[-1]))
+        h_last = current_map.get_fly_height(*path[-1])
+        y_fly.append(h_last)
+        interp_coords.append((path[-1][0], path[-1][1]))
 
-        # 终点
-        terrain_interp.append(current_map.get_elevation(*path[-1]))
-        fly_interp.append(current_map.get_fly_height(*path[-1]))
-        x_interp.append(total_idx)
+        x_dist    = np.array(x_dist)
+        y_terrain = np.array(y_terrain)
+        y_fly     = np.array(y_fly)
 
-        terrain_interp = np.array(terrain_interp)
-        fly_interp     = np.array(fly_interp)
-        x_interp       = np.array(x_interp)
-
-        tree_limit   = terrain_interp + current_map.max_tree_height
+        tree_limit   = y_terrain + current_map.max_tree_height
         safety_limit = tree_limit + current_map.security_height
 
-        axs[i, 1].fill_between(x_interp, terrain_interp, tree_limit,  color="green",   alpha=0.2, label='Trees')
-        axs[i, 1].fill_between(x_interp, tree_limit, safety_limit,    color="skyblue", alpha=0.3, label='Safety Margin')
-        axs[i, 1].plot(x_interp, terrain_interp, color='gray',  alpha=0.6, linewidth=1, label='Terrain')
-        axs[i, 1].plot(x_interp, fly_interp,     color='blue',  linewidth=2,            label='Flight Plan')
+        # ── Droite : profil ────────────────────────────────────────────
+        ax_prof.set_facecolor('#0d1117')
+        ax_prof.fill_between(x_dist, y_terrain, tree_limit,
+                             color='#2e7d32', alpha=0.35, label='Arbres')
+        ax_prof.fill_between(x_dist, tree_limit, safety_limit,
+                             color='#0288d1', alpha=0.25, label='Marge sécurité')
+        ax_prof.plot(x_dist, y_terrain, color=C_TERRAIN, alpha=0.7, linewidth=1, label='Terrain')
+        ax_prof.plot(x_dist, y_fly,     color=C_PROF,    linewidth=2,             label='Plan de vol')
 
-        # waypoint 标记点
-        fly_waypoints = [current_map.get_fly_height(*pt) for pt in path]
-        axs[i, 1].scatter(np.arange(len(path)), fly_waypoints, color='blue', s=20, zorder=5)
+        # Waypoints sur le profil (distance réelle)
+        wp_heights = [current_map.get_fly_height(*pt) for pt in path]
+        ax_prof.scatter(cum_dist, wp_heights, color=C_PROF, s=30, zorder=5,
+                        edgecolors='white', linewidths=0.5)
 
-        axs[i, 1].axhline(y=current_map.max_fly_height, color='red', linestyle='--', alpha=0.7, label='Max Altitude')
-        axs[i, 1].set_title(f"Profile {i+1} : {len(path)} Waypoints | {titles[i]}")
-        axs[i, 1].legend(loc='upper right', fontsize='xx-small')
-        axs[i, 1].set_xlabel("Waypoint Index")
-        axs[i, 1].set_ylabel("Elevation (m)")
+        ax_prof.axhline(y=current_map.max_fly_height, color='red',
+                        linestyle='--', alpha=0.7, linewidth=1, label='Alt. max')
 
-    plt.tight_layout()
+        total_m = cum_dist[-1]
+        ax_prof.set_title(
+            f"Profil {i+1} | {len(path)} waypoints | {total_m:.0f} m | {titles[i]}",
+            color='white', fontsize=9
+        )
+        ax_prof.set_xlabel("Distance (m)", color='#ccc')
+        ax_prof.set_ylabel("Altitude (m)", color='#ccc')
+        ax_prof.tick_params(colors='#aaa')
+        ax_prof.legend(loc='lower left', fontsize=7, facecolor='#222', labelcolor='white',
+                      framealpha=0.85, edgecolor='#555')
+        ax_prof.grid(True, linestyle='--', alpha=0.2, color='#555')
+        for spine in ax_prof.spines.values():
+            spine.set_edgecolor('#444')
+
+        # ── Curseurs interactifs ───────────────────────────────────────
+        # Marqueur mobile sur la carte
+        map_marker, = ax_map.plot([], [], 'o', color='yellow',
+                                  markersize=10, zorder=10,
+                                  markeredgecolor='black', markeredgewidth=1)
+        map_crossH  = ax_map.axhline(y=-999, color='yellow', alpha=0.4, linewidth=0.8)
+        map_crossV  = ax_map.axvline(x=-999, color='yellow', alpha=0.4, linewidth=0.8)
+
+        # Ligne verticale mobile sur le profil
+        prof_vline  = ax_prof.axvline(x=-999, color='yellow', alpha=0.5, linewidth=1)
+        prof_dot,   = ax_prof.plot([], [], 'o', color='yellow', markersize=7, zorder=10,
+                                   markeredgecolor='black', markeredgewidth=0.8)
+        # Annotation altitude
+        prof_annot  = ax_prof.annotate('', xy=(0, 0), xytext=(8, 8),
+                                       textcoords='offset points',
+                                       fontsize=7, color='yellow',
+                                       bbox=dict(boxstyle='round,pad=0.3',
+                                                 fc='#1a1a2e', ec='yellow', alpha=0.85))
+
+        row_data.append({
+            'path': path,
+            'path_px': path_px,
+            'cum_dist': cum_dist,
+            'x_dist': x_dist,
+            'y_fly': y_fly,
+            'interp_coords': interp_coords,
+            'ax_map': ax_map,
+            'ax_prof': ax_prof,
+            'map_marker': map_marker,
+            'map_crossH': map_crossH,
+            'map_crossV': map_crossV,
+            'prof_vline': prof_vline,
+            'prof_dot': prof_dot,
+            'prof_annot': prof_annot,
+        })
+
+    # ── Callback souris ───────────────────────────────────────────────
+    def _update_from_dist(rd, dist_m):
+        """Met à jour les deux axes à partir d'une distance (m)."""
+        idx = int(np.searchsorted(rd['x_dist'], dist_m, side='left'))
+        idx = max(0, min(idx, len(rd['x_dist']) - 1))
+
+        coord = rd['interp_coords'][idx]
+        px    = dataset.index(coord[0], coord[1])
+        alt   = rd['y_fly'][idx]
+        d     = rd['x_dist'][idx]
+
+        # Carte
+        rd['map_marker'].set_data([px[1]], [px[0]])
+        rd['map_crossH'].set_ydata([px[0]])
+        rd['map_crossV'].set_xdata([px[1]])
+        # Profil
+        rd['prof_vline'].set_xdata([d])
+        rd['prof_dot'].set_data([d], [alt])
+        rd['prof_annot'].set_text(f"{alt:.1f} m\n{d:.0f} m")
+        rd['prof_annot'].xy = (d, alt)
+
+    def _update_from_map_px(rd, col, row):
+        """Met à jour à partir d'un clic/survol sur la carte (pixel)."""
+        # Trouve le waypoint le plus proche en pixel
+        dists_px = [np.hypot(col - p[1], row - p[0]) for p in rd['path_px']]
+        wi = int(np.argmin(dists_px))
+        dist_m = float(rd['cum_dist'][wi])
+        _update_from_dist(rd, dist_m)
+
+    def on_mouse_move(event):
+        for rd in row_data:
+            if rd is None:
+                continue
+            if event.inaxes == rd['ax_prof']:
+                if event.xdata is not None:
+                    _update_from_dist(rd, event.xdata)
+                    fig.canvas.draw_idle()
+            elif event.inaxes == rd['ax_map']:
+                if event.xdata is not None and event.ydata is not None:
+                    _update_from_map_px(rd, event.xdata, event.ydata)
+                    fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect('motion_notify_event', on_mouse_move)
+
+    plt.tight_layout(pad=1.5)
+    plt.subplots_adjust(hspace=0.45)
     plt.show()
 
 def get_cumulative_distances(path):
