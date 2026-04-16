@@ -414,14 +414,14 @@ def mutliplot_path(current_map, paths, titles, targets_list=None):
         ax_map.scatter(path_px[0][1],  path_px[0][0],  color='lime',  s=60, zorder=5, label='Départ')
         ax_map.scatter(path_px[-1][1], path_px[-1][0], color='red',   s=60, zorder=5, label='Arrivée')
 
-        # Points cibles intermédiaires (orange) — passés via targets_list[i]
+        # Cibles intermédiaires en orange ★
         if targets_list is not None and i < len(targets_list) and targets_list[i]:
             for tgt in targets_list[i]:
-                tgt_px = dataset.index(tgt[0], tgt[1])
-                ax_map.scatter(tgt_px[1], tgt_px[0], color='orange', s=70,
-                               zorder=6, marker='*', label='_nolegend_')
-            # Une seule entrée dans la légende
-            ax_map.scatter([], [], color='orange', s=70, marker='*', label='Cibles')
+                tgt_proj = current_map.convert_coords(tgt[0], tgt[1])
+                tgt_px   = dataset.index(tgt_proj[0], tgt_proj[1])
+                ax_map.scatter(tgt_px[1], tgt_px[0], color='orange', s=120,
+                               zorder=7, marker='*', label='_nolegend_')
+            ax_map.scatter([], [], color='orange', s=120, marker='*', label='Cibles')
         ax_map.set_title(f"Carte – trajet {i+1}", color='white', fontsize=9)
         ax_map.set_xticks([]); ax_map.set_yticks([])
         ax_map.legend(loc='upper left', fontsize=7, facecolor='#222', labelcolor='white',
@@ -498,7 +498,7 @@ def mutliplot_path(current_map, paths, titles, targets_list=None):
         ax_prof.axhline(y=current_map.max_fly_height, color='red',
                         linestyle='--', alpha=0.7, linewidth=1, label='Alt. max')
 
-        # ── Axes : X depuis 0, Y depuis terrain_min - 50 m ───────────
+        # X depuis 0, Y depuis terrain_min - 50 m
         ax_prof.set_xlim(0, float(cum_dist[-1]) * 1.02)
         y_min = float(np.min(y_terrain)) - 50
         y_max = float(max(np.max(y_fly), current_map.max_fly_height)) + 20
@@ -606,7 +606,6 @@ def get_cumulative_distances(path):
     distances = [0]
     total_dist = 0
     for i in range(1, len(path)):
-        # calcul de distance euclidienne
         p1 = np.array(path[i-1])
         p2 = np.array(path[i])
         dist = np.linalg.norm(p1 - p2)

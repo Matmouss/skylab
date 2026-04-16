@@ -184,7 +184,7 @@ if __name__ == "__main__":
             plot_paths.append(retour_path)
             plot_titles.append(f"Retour | {len(retour_path)} waypoints")
 
-        graphics.mutliplot_path(current_map, plot_paths, plot_titles)
+        graphics.mutliplot_path(current_map, plot_paths, plot_titles,targets_list=[targets, []])
 
     init_drone()
 
