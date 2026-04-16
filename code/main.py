@@ -150,15 +150,41 @@ if __name__ == "__main__":
     config = json.load(open(config_json_path))
 
 
-
-    current_map = topography.Map(config)
-
     #test.main_temp(current_map)
 
     #test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
+    '''
+    current_map = topography.Map(config)
     penalties = np.linspace(PENALTY_MIN, PENALTY_MAX, N_PATHS)
     test.astar_comparaison(current_map, N_PATHS, penalties)
+    '''
+
+    current_map = topography.Map(config)
+
+    start_point = current_map.get_random_valid_point()
+    targets = [current_map.get_random_valid_point() for _ in range(3)]
+
+    # Planification de Trajectoire - multi points
+    aller_path, retour_path = fly_control.boucle_principale(
+        current_map,
+        start_node=start_point,
+        targets=targets,
+        penalty=PENALTY_MIN
+    )
+
+    if aller_path:
+        print(f"Aller：{len(aller_path)} waypoints")
+
+        plot_paths  = [aller_path]
+        plot_titles = [f"Aller | {len(aller_path)} waypoints"]
+
+        if retour_path:
+            print(f"Retour：{len(retour_path)} waypoints")
+            plot_paths.append(retour_path)
+            plot_titles.append(f"Retour | {len(retour_path)} waypoints")
+
+        graphics.mutliplot_path(current_map, plot_paths, plot_titles)
 
     init_drone()
 

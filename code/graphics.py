@@ -29,7 +29,7 @@ def _add_arrows_to_path(ax, pixel_coords, color):
     ax.annotate('', xy=(c2, r2), xytext=(c1, r1),
                 arrowprops=dict(arrowstyle='->', color=color, lw=1, mutation_scale=6),
                 zorder=4)
-def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=False):
+def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, current_map,is_dynamic=False):
     # --- 1. basic map ---
     full_img = dataset.read(1)
     ax.imshow(full_img, cmap='gray')
@@ -237,10 +237,10 @@ def map_mutli_points_plot_compare(dataset, map_shape, data_before, data_after, c
     plt.tight_layout()
     plt.show()
 
-def map_mutli_points_plot(dataset, map_shape, points_in_shape=None, retour_path=None, points_out_shape=None, draw_path=True):
+def map_mutli_points_plot(dataset, map_shape,current_map, points_in_shape=None, retour_path=None, points_out_shape=None,draw_path=True):
     fig, ax = plt.subplots(figsize=(10, 8))
     data = {'path_aller': points_in_shape, 'path_retour': retour_path, 'points_out': points_out_shape}
-    _draw_mission_on_ax(ax, dataset, map_shape, data, "Mission Drone", is_dynamic=False)
+    _draw_mission_on_ax(ax, dataset, map_shape, data, "Mission Drone",current_map, is_dynamic=False)
     plt.show()
 
 def mutli_points_plot_path(current_map, paths):
@@ -350,7 +350,7 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.legend(loc='upper right')
     plt.show()
 
-def mutliplot_path(current_map, paths, titles):
+def mutliplot_path(current_map, paths, titles, targets_list=None):
     """
     Affiche pour chaque trajet :
       - Colonne gauche  : vue carte (image + tracé)
@@ -413,6 +413,15 @@ def mutliplot_path(current_map, paths, titles):
         # Départ (vert) / Arrivée (rouge)
         ax_map.scatter(path_px[0][1],  path_px[0][0],  color='lime',  s=60, zorder=5, label='Départ')
         ax_map.scatter(path_px[-1][1], path_px[-1][0], color='red',   s=60, zorder=5, label='Arrivée')
+
+        # Points cibles intermédiaires (orange) — passés via targets_list[i]
+        if targets_list is not None and i < len(targets_list) and targets_list[i]:
+            for tgt in targets_list[i]:
+                tgt_px = dataset.index(tgt[0], tgt[1])
+                ax_map.scatter(tgt_px[1], tgt_px[0], color='orange', s=70,
+                               zorder=6, marker='*', label='_nolegend_')
+            # Une seule entrée dans la légende
+            ax_map.scatter([], [], color='orange', s=70, marker='*', label='Cibles')
         ax_map.set_title(f"Carte – trajet {i+1}", color='white', fontsize=9)
         ax_map.set_xticks([]); ax_map.set_yticks([])
         ax_map.legend(loc='upper left', fontsize=7, facecolor='#222', labelcolor='white',
@@ -488,6 +497,12 @@ def mutliplot_path(current_map, paths, titles):
 
         ax_prof.axhline(y=current_map.max_fly_height, color='red',
                         linestyle='--', alpha=0.7, linewidth=1, label='Alt. max')
+
+        # ── Axes : X depuis 0, Y depuis terrain_min - 50 m ───────────
+        ax_prof.set_xlim(0, float(cum_dist[-1]) * 1.02)
+        y_min = float(np.min(y_terrain)) - 50
+        y_max = float(max(np.max(y_fly), current_map.max_fly_height)) + 20
+        ax_prof.set_ylim(y_min, y_max)
 
         total_m = cum_dist[-1]
         ax_prof.set_title(
@@ -591,7 +606,7 @@ def get_cumulative_distances(path):
     distances = [0]
     total_dist = 0
     for i in range(1, len(path)):
-        # 计算相邻两点间的欧几里得距离
+        # calcul de distance euclidienne
         p1 = np.array(path[i-1])
         p2 = np.array(path[i])
         dist = np.linalg.norm(p1 - p2)

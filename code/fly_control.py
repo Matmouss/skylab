@@ -4,7 +4,7 @@ import numpy as np
 EPSILON_ALTITUDE = 2   # gardé pour compatibilité (non utilisé dans le nouveau lissage)
 
 # ── Paramètres de lissage (à ajuster pour la soutenance) ──────────────────
-RDP_TOLERANCE   = 5    # mètres — tolérance RDP 3D : plus grand = plus lissé
+RDP_TOLERANCE   = 1   # mètres — tolérance RDP 3D : plus grand = plus lissé
 MAX_CLIMB_ANGLE = 15.0   # degrés — angle de montée/descente max autorisé
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -245,11 +245,14 @@ def boucle_principale(current_map, start_node, targets, penalty):
 
     # PHASE RETOUR
     print(f"Planification du retour : {current_pos} -> {start_node}")
-    segment_retour = astar(current_map, current_pos, start_node, penalty)
-    
-    if segment_retour:
-        retour_path = smooth_path_by_elevation(current_map, segment_retour, epsilon=EPSILON_ALTITUDE)
-    else:
+    if current_pos == start_node:
+        print("Retour : déjà au point de départ, pas de chemin retour.")
         retour_path = []
+    else:
+        segment_retour = astar(current_map, current_pos, start_node, penalty)
+        if segment_retour and len(segment_retour) >= 2:
+            retour_path = smooth_path_by_elevation(current_map, segment_retour, epsilon=EPSILON_ALTITUDE)
+        else:
+            retour_path = []
 
     return aller_path, retour_path
