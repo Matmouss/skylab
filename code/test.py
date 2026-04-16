@@ -78,7 +78,8 @@ def astar(current_map, nb_paths, penalty=DEFAULT_PENALTY):
         else:
             print("Erreur : Aucun chemin valide trouvé. Vérifiez si les points sont bien dans la zone autorisée.")
 
-def astar_comparaison(current_map, n=1):
+def astar_comparaison(current_map, n=1, penalties=None):
+   
     paths = []
     titles = []
     start_pt = (-1.531098974090213, 47.28897545723686)
@@ -87,23 +88,24 @@ def astar_comparaison(current_map, n=1):
     start_proj = current_map.convert_coords(*start_pt)
     end_proj   = current_map.convert_coords(*end_pt)
 
-    penaltys = np.linspace(0, 1, n)
+    if penalties is None:
+        penalties = np.linspace(0, 1, n)
 
     for i in range(n):
         print(f"Coordonnées projetées Départ : {start_proj}, Dans la zone : {current_map.in_map_shape(*start_proj)}")
         print(f"Coordonnées projetées Arrivée : {end_proj}, Dans la zone : {current_map.in_map_shape(*end_proj)}")
 
-        path = fly_control.astar(current_map, start_pt, end_pt, penaltys[i])
+        path = fly_control.astar(current_map, start_pt, end_pt, penalties[i])
         
 
         if path:
-            print(f"Succès : Chemin trouvé avec {len(path)} waypoints (penalty={penaltys[i]:.2f}).")
+            print(f"Succès : Chemin trouvé avec {len(path)} waypoints (penalty={penalties[i]:.2f}).")
             paths.append(path)
-            titles.append(f"Penalty={penaltys[i]:.2f} | {len(path)} waypoints")
+            titles.append(f"Penalty={penalties[i]:.2f} | {len(path)} waypoints")
         else:
             print("Erreur : Aucun chemin valide rencontré. Vérifiez si les points sont bien dans la zone autorisée.")
             paths.append([])
-            titles.append(f"Penalty={penaltys[i]:.2f} | aucun chemin")
+            titles.append(f"Penalty={penalties[i]:.2f} | aucun chemin")
 
     print(f"{len(paths)} trajet(s) calculé(s)")
     graphics.mutliplot_path(current_map, paths, titles)

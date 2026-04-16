@@ -1,7 +1,12 @@
 import heapq
 import numpy as np
 
-EPSILON_ALTITUDE = 0.05
+EPSILON_ALTITUDE = 2   # gardé pour compatibilité (non utilisé dans le nouveau lissage)
+
+# ── Paramètres de lissage (à ajuster pour la soutenance) ──────────────────
+RDP_TOLERANCE   = 5    # mètres — tolérance RDP 3D : plus grand = plus lissé
+MAX_CLIMB_ANGLE = 15.0   # degrés — angle de montée/descente max autorisé
+# ──────────────────────────────────────────────────────────────────────────
 
 def heuristic(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
@@ -68,42 +73,146 @@ def reconstruct_path(current_map, came_from, current):
         path.append(lon_lat)
         current = came_from[current]
     
-    # 加入起点
     lon_lat = current_map.dataset.xy(current[0], current[1])
     path.append(lon_lat)
     
     return path[::-1]
 
-def smooth_path_by_elevation(current_map, path, epsilon=3.0, max_step=20):
+def _rdp_3d(points_3d, tolerance):
     """
-    保留：起点、终点、高度极值点、以及每隔 max_step 个点强制保留一个
+    Ramer-Douglas-Peucker sur des points 3D (x, y, altitude).
+    Retourne un masque booléen des indices à conserver.
+    """
+    if len(points_3d) <= 2:
+        return list(range(len(points_3d)))
+
+    keep = [False] * len(points_3d)
+    keep[0] = True
+    keep[-1] = True
+
+    stack = [(0, len(points_3d) - 1)]
+    while stack:
+        start, end = stack.pop()
+        if end - start <= 1:
+            continue
+
+        p1 = np.array(points_3d[start], dtype=float)
+        p2 = np.array(points_3d[end],   dtype=float)
+        segment = p2 - p1
+        seg_len = np.linalg.norm(segment)
+
+        if seg_len == 0:
+            continue
+
+        # Distance perpendiculaire de chaque point intermédiaire au segment p1-p2
+        max_dist = 0.0
+        max_idx  = start
+        for i in range(start + 1, end):
+            pt   = np.array(points_3d[i], dtype=float)
+            proj = np.dot(pt - p1, segment) / (seg_len ** 2)
+            proj = max(0.0, min(1.0, proj))
+            closest = p1 + proj * segment
+            dist = np.linalg.norm(pt - closest)
+            if dist > max_dist:
+                max_dist = dist
+                max_idx  = i
+
+        if max_dist > tolerance:
+            keep[max_idx] = True
+            stack.append((start, max_idx))
+            stack.append((max_idx, end))
+
+    return [i for i, k in enumerate(keep) if k]
+
+
+def _split_by_climb_angle(path_3d, indices, max_angle_deg):
+    """
+    Après RDP, vérifie l'angle de montée/descente entre waypoints consécutifs.
+    Si l'angle dépasse max_angle_deg, insère le point le plus haut du segment intermédiaire.
+    path_3d : liste de (x, y, altitude) — coordonnées complètes avant RDP.
+    indices  : indices retenus par RDP (dans path_3d).
+    """
+    max_angle_rad = np.radians(max_angle_deg)
+    result = list(indices)
+    changed = True
+
+    while changed:
+        changed = False
+        new_result = [result[0]]
+        for k in range(1, len(result)):
+            i_prev = result[k - 1]
+            i_curr = result[k]
+            p1 = np.array(path_3d[i_prev])
+            p2 = np.array(path_3d[i_curr])
+
+            horiz = np.linalg.norm(p2[:2] - p1[:2])
+            if horiz < 1e-6:
+                new_result.append(i_curr)
+                continue
+
+            dh = abs(p2[2] - p1[2])
+            angle = np.arctan2(dh, horiz)
+
+            if angle > max_angle_rad:
+                # Cherche le point intermédiaire qui réduit le mieux l'angle
+                best_idx = None
+                best_angle = angle
+                for j in range(i_prev + 1, i_curr):
+                    pm = np.array(path_3d[j])
+                    h1 = np.linalg.norm(pm[:2] - p1[:2])
+                    h2 = np.linalg.norm(p2[:2] - pm[:2])
+                    if h1 < 1e-6 or h2 < 1e-6:
+                        continue
+                    a1 = np.arctan2(abs(pm[2] - p1[2]), h1)
+                    a2 = np.arctan2(abs(p2[2] - pm[2]), h2)
+                    worst = max(a1, a2)
+                    if worst < best_angle:
+                        best_angle = worst
+                        best_idx   = j
+
+                if best_idx is not None:
+                    new_result.append(best_idx)
+                    changed = True
+
+            new_result.append(i_curr)
+        result = new_result
+
+    return result
+
+
+def smooth_path_by_elevation(current_map, path,
+                              epsilon=None,        # ignoré, gardé pour compatibilité
+                              max_step=None,       # ignoré
+                              rdp_tol=None,
+                              max_climb=None):
+    """
+    Lissage 3D du chemin en deux étapes :
+      1. RDP 3D  — supprime les micro-variations (zigzags)
+      2. Contrôle d'angle — insère des waypoints si la pente est trop raide
+
+    Paramètres (priorité : argument > constante globale) :
+      rdp_tol   : tolérance RDP en mètres        (défaut : RDP_TOLERANCE)
+      max_climb : angle de montée max en degrés   (défaut : MAX_CLIMB_ANGLE)
     """
     if len(path) <= 2:
         return path
 
-    heights = [current_map.get_fly_height(*pt) for pt in path]
-    
-    simplified_path = [path[0]]
-    last_kept_idx = 0
+    tol   = rdp_tol   if rdp_tol   is not None else RDP_TOLERANCE
+    angle = max_climb if max_climb is not None else MAX_CLIMB_ANGLE
 
-    for i in range(1, len(path) - 1):
-        prev_h = heights[i-1]
-        curr_h = heights[i]
-        next_h = heights[i+1]
+    # Construction des points 3D : (x_proj, y_proj, altitude_vol)
+    pts3d = []
+    for pt in path:
+        h = current_map.get_fly_height(pt[0], pt[1])
+        pts3d.append((pt[0], pt[1], h))
 
-        is_peak = (curr_h > prev_h + epsilon) and (curr_h > next_h + epsilon)
-        is_valley = (curr_h < prev_h - epsilon) and (curr_h < next_h - epsilon)
-        
-        # 强制每隔 max_step 个点保留一个，防止路径退化为直线
-        is_forced = (i - last_kept_idx) >= max_step
+    # Étape 1 : RDP 3D
+    kept_indices = _rdp_3d(pts3d, tol)
 
-        if is_peak or is_valley or is_forced:
-            simplified_path.append(path[i])
-            last_kept_idx = i
-            
-    simplified_path.append(path[-1])
-    
-    return simplified_path
+    # Étape 2 : contrôle angle de montée
+    kept_indices = _split_by_climb_angle(pts3d, kept_indices, angle)
+
+    return [path[i] for i in kept_indices]
 
 def boucle_principale(current_map, start_node, targets, penalty):
     aller_path = [] 
@@ -118,7 +227,7 @@ def boucle_principale(current_map, start_node, targets, penalty):
                               current_map.convert_coords(*t)
                           ))
         
-        # ✅ 修复：先调用 astar 获取 segment，再做平滑
+        # Utiliser astar pour obtenir segment -> smoothing
         segment = astar(current_map, current_pos, next_target, penalty)
 
         if segment:

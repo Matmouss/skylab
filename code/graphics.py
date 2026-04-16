@@ -18,7 +18,7 @@ def dataset_plot_2(dataset):
 
 def _add_arrows_to_path(ax, pixel_coords, color):
 
-    if len(pixel_coords) < 2:  # 路径太短则不画
+    if len(pixel_coords) < 2:  # chemin trop court
         return
 
     coords = np.array(pixel_coords)
@@ -30,11 +30,11 @@ def _add_arrows_to_path(ax, pixel_coords, color):
                 arrowprops=dict(arrowstyle='->', color=color, lw=1, mutation_scale=6),
                 zorder=4)
 def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=False):
-    # --- 1. 基础地图绘制 ---
+    # --- 1. basic map ---
     full_img = dataset.read(1)
     ax.imshow(full_img, cmap='gray')
 
-    # 绘制任务边界
+    # bord
     pixels = [dataset.index(lon, lat) for lon, lat in map_shape]
     ax.plot([p[1] for p in pixels], [p[0] for p in pixels], color='cyan', linewidth=2, label='Limites', zorder=2)
 
@@ -42,36 +42,35 @@ def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=Fal
         ax.set_title(title)
         return
 
-    # --- 2. 路径处理与距离计算 ---
-    # 我们将去程和回程合并或分别处理。这里以去程 path_aller 为主生成 Profile
+    # --- 2. calculer la distance et traiter le chemin ---
+    # aller - retour
     path = data_dict.get('path_aller', [])
     
     if path:
-        # 2a. 计算每个 waypoint 的像素坐标（用于左图绘制）
+        # 2a. calculer chaque pixel de waypoint (pour la graphe à gauche)
         px_in = [dataset.index(pt[0], pt[1]) for pt in path]
         line_color = '#00FFFF'
-        # 在左图画出完整的连续线段，解决你之前“只有点”的问题
+        # tracer les lignes
         ax.plot([p[1] for p in px_in], [p[0] for p in px_in], color=line_color, 
                  linewidth=1.2, label='Trajet Aller', zorder=3)
         _add_arrows_to_path(ax, px_in, line_color)
 
-        # 2b. 计算物理距离 (x轴)
-        # 注意：这里直接使用坐标数值计算。如果你的坐标是经纬度且跨度极大，建议先转投影坐标
+        # 2b. calculer la distance (x axe)
         cum_distances = [0]
         total_dist = 0
         for i in range(1, len(path)):
             p1 = np.array(path[i-1])
             p2 = np.array(path[i])
-            dist = np.linalg.norm(p1 - p2) # 欧几里得距离
+            dist = np.linalg.norm(p1 - p2) 
             total_dist += dist
             cum_distances.append(total_dist)
         cum_distances = np.array(cum_distances)
 
-        # --- 3. 准备右图 (Profile View) 的数据 ---
-        # 我们需要在两个 Waypoint 之间进行高密度采样，以还原地形起伏
+        # --- 3. préparer les donnes de la graphe à droite (Profile View) ---
+        # échantilloner deux Waypoint pour voir le terrain
         terrain_interp = []
         fly_interp = []
-        x_dist_interp = [] # 存储采样点对应的真实物理距离
+        x_dist_interp = [] 
 
         for i in range(len(path) - 1):
             p_start = np.array(path[i])
@@ -79,44 +78,37 @@ def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=Fal
             d_start = cum_distances[i]
             d_end = cum_distances[i+1]
             
-            # 在这两点之间插值 10 个采样点
-            num_samples = 10
+            # 30 points d'échantillonnage
+            num_samples = 30
             for j in range(num_samples):
                 fraction = j / num_samples
-                # 线性插值坐标
+                # échantillonnage linéaire
                 interp_pt = p_start + fraction * (p_end - p_start)
-                # 线性插值物理距离坐标
                 interp_dist = d_start + fraction * (d_end - d_start)
                 
                 terrain_interp.append(current_map.get_elevation(*interp_pt))
                 fly_interp.append(current_map.get_fly_height(*interp_pt))
                 x_dist_interp.append(interp_dist)
 
-        # 加入最后一个终点
+        # destination
         terrain_interp.append(current_map.get_elevation(*path[-1]))
         fly_interp.append(current_map.get_fly_height(*path[-1]))
         x_dist_interp.append(cum_distances[-1])
 
-        # 转换为 Numpy 数组方便计算
         terrain_interp = np.array(terrain_interp)
         fly_interp = np.array(fly_interp)
         x_dist_interp = np.array(x_dist_interp)
         
-        # --- 4. 绘制右图 (Profile View) ---
-        # 注意：此函数通常被外部循环调用，假设 fig.axes[1] 是对应的 Profile Ax
-        # 如果你的代码逻辑里 axs 是传入的，请根据实际对象操作。
-        # 这里演示如何更新右图：
-        import matplotlib.pyplot as plt
+        # --- 4. dessiner la graphe à droite (Profile View) ---
         fig = plt.gcf()
         all_axs = fig.get_axes()
-        # 寻找当前 ax 对应的右侧绘图区 (假设是成对出现的)
-        # 如果这个函数只管左图，请将以下逻辑移至专门画 Profile 的地方
+    
         try:
-            # 找到当前 ax 在子图中的索引，假设 profile 在右边
+        
             ax_idx = list(all_axs).index(ax)
             profile_ax = all_axs[ax_idx + 1] 
             
-            profile_ax.clear() # 清除旧的索引图
+            profile_ax.clear() 
             
             tree_limit   = terrain_interp + current_map.max_tree_height
             safety_limit = tree_limit + current_map.security_height
@@ -126,7 +118,7 @@ def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=Fal
             profile_ax.plot(x_dist_interp, terrain_interp, color='gray',  alpha=0.6, linewidth=1, label='Terrain')
             profile_ax.plot(x_dist_interp, fly_interp,     color='blue',  linewidth=2,            label='Flight Plan')
 
-            # 绘制 Waypoint 蓝点 (横坐标现在是真实距离了！)
+            # desinner Waypoint 
             fly_waypoints = [current_map.get_fly_height(*pt) for pt in path]
             profile_ax.scatter(cum_distances, fly_waypoints, color='blue', s=25, zorder=5, label='Waypoints')
             
@@ -134,9 +126,9 @@ def _draw_mission_on_ax(ax, dataset, map_shape, data_dict, title, is_dynamic=Fal
             profile_ax.set_ylabel("Elevation (m)")
             profile_ax.legend(loc='upper right', fontsize='xx-small')
         except:
-            pass # 如果没有对应的右图则跳过
+            pass 
 
-    # --- 5. 绘制回程和其他标记 (保持原逻辑) ---
+    # --- 5. dessiner le retour ---
     if data_dict.get('path_retour'):
         px_ret = [dataset.index(pt[0], pt[1]) for pt in data_dict['path_retour']]
         ret_color = 'black'
@@ -164,9 +156,7 @@ def map_mutli_points_plot_compare(dataset, map_shape, data_before, data_after, c
     """
     显示任务对比：左侧为地图视图，右侧为基于真实物理距离的高度剖面图。
     """
-    # 创建 2x2 的布局：第一行是初始任务，第二行是动态任务
-    # [0,0] 地图 [0,1] 剖面
-    # [1,0] 地图 [1,1] 剖面
+   
     fig, axs = plt.subplots(2, 2, figsize=(16, 12), gridspec_kw={'width_ratios': [1, 1.5]})
     
     titles = ["1. Trajet INITIAL", "2. Trajet DYNAMIQUE"]
@@ -175,14 +165,11 @@ def map_mutli_points_plot_compare(dataset, map_shape, data_before, data_after, c
 
     for i in range(2):
         data_dict = datasets[i]
-        # --- 1. 绘制左侧地图 ---
-        # 调用你之前修改过的 _draw_mission_on_ax
         _draw_mission_on_ax(axs[i, 0], dataset, map_shape, data_dict, titles[i], is_dynamic=is_dynamics[i])
 
-        # --- 2. 绘制右侧剖面图 (重点修改：使用物理距离) ---
         path = data_dict.get('path_aller', [])
         if path:
-            # A. 计算每个 Waypoint 之间的物理距离 (累加)
+            # A. calculer la distance entre les Waypoint
             cum_distances = [0]
             curr_dist = 0
             for k in range(1, len(path)):

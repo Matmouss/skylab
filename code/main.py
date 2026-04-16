@@ -1,6 +1,13 @@
 import topography, fly_control, os, json, graphics, test, time, logging
 import numpy as np
 
+# ── les paramètres ──────────────────────
+N_PATHS        = 1     # le nombre de grahes
+PENALTY_MIN    = 0.5   
+PENALTY_MAX    = 0.5        
+EPSILON_ALT    = 0.5      # 路径平滑阈值（米）
+# ─────────────────────────────────────────────────────
+
 def log_state(logger, lat, lon, altitude, battery):
     logger.info(
         f"STATE | lat={lat} lon={lon} alt={altitude}m battery={battery}%"
@@ -150,7 +157,8 @@ if __name__ == "__main__":
 
     #test.carte_et_points(current_map, 500)
     #test.astar(current_map,1)
-    test.astar_comparaison(current_map, 3)
+    penalties = np.linspace(PENALTY_MIN, PENALTY_MAX, N_PATHS)
+    test.astar_comparaison(current_map, N_PATHS, penalties)
 
     init_drone()
 
