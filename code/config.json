@@ -40,6 +40,10 @@
           ],
     "security_height": 5,
     "max_tree_height": 20,
-    "max_fly_height": 60
-
+    "max_fly_height": 60,
+    "mass_kg": 2.0,
+    "battery_wh": 200,
+    "cruise_speed_ms": 10.0,
+    "hover_power_w": 150,
+    "drag_coef": 0.3
 }

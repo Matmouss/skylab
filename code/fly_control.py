@@ -1,38 +1,76 @@
 import heapq
+import math
 import numpy as np
 
 EPSILON_ALTITUDE = 2   # gardé pour compatibilité (non utilisé dans le nouveau lissage)
 
 # ── Paramètres de lissage (à ajuster pour la soutenance) ──────────────────
-RDP_TOLERANCE   = 1   # mètres — tolérance RDP 3D : plus grand = plus lissé
+RDP_TOLERANCE   = 1      # mètres — tolérance RDP 3D : plus grand = plus lissé
 MAX_CLIMB_ANGLE = 15.0   # degrés — angle de montée/descente max autorisé
 # ──────────────────────────────────────────────────────────────────────────
+
 
 def heuristic(a, b):
     return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
 
-def get_cost(current_map, current_node, neighbor_node, penalty):
+def get_cost(current_map, current_node, neighbor_node, penalty, wind=None, energy_mdl=None):
     """
-    Calcule le coût de déplacement : Coût de distance + Pénalité d'altitude.
-    Coût de distance de base (1.0 pour orthogonal, 1.414 pour diagonal)
-    Pénalité d'altitude : Encourage le drone à rester dans les zones basses
+    Calcule le coût de déplacement entre deux nœuds de la grille.
+
+    Sans wind/energy_mdl  → coût = distance euclidienne + pénalité altitude  (comportement original)
+    Avec wind + energy_mdl → coût = énergie du segment (kJ)  + pénalité altitude
+                              L'énergie intègre : puissance moteur × temps de vol,
+                              lui-même dépendant de la composante de vent de face/arrière.
+
+    Paramètres
+    ----------
+    current_node  : (row, col) nœud courant dans la grille raster
+    neighbor_node : (row, col) nœud voisin
+    penalty       : float — coefficient de pénalité d'altitude (0 = ignorée)
+    wind          : dict  — {'u': float, 'v': float, ...} composantes vent en m/s
+                            (u = Est, v = Nord) — None pour désactiver
+    energy_mdl    : DroneEnergyModel — None pour désactiver
     """
-    dist = np.sqrt((current_node[0] - neighbor_node[0])**2 + (current_node[1] - neighbor_node[1])**2)
-    
-    elevation = current_map.  raster_data[neighbor_node[0], neighbor_node[1]]
+    p1 = current_map.dataset.xy(current_node[0],  current_node[1])
+    p2 = current_map.dataset.xy(neighbor_node[0], neighbor_node[1])
+
+    dist = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+
+    if energy_mdl is not None and wind is not None:
+        headwind = energy_mdl.project_wind_on_segment(p1, p2, wind)
+        energy_j, _ = energy_mdl.segment_energy_j(dist, {"headwind": headwind})
+        base_cost = energy_j / 1000.0
+    else:
+        base_cost = dist
+
+    elevation = current_map.raster_data[neighbor_node[0], neighbor_node[1]]
     elevation_penalty = elevation * penalty
-    
-    return dist + elevation_penalty
-def astar(current_map, start_lon_lat, end_lon_lat, penalty):
+
+    return base_cost + elevation_penalty
+
+
+def astar(current_map, start_lon_lat, end_lon_lat, penalty, wind=None, energy_mdl=None):
     """
     Exécute l'algorithme A* pour trouver le chemin optimal entre deux points GPS.
+
+    Paramètres
+    ----------
+    start_lon_lat : (lon, lat) ou (x_proj, y_proj) point de départ
+    end_lon_lat   : (lon, lat) ou (x_proj, y_proj) point d'arrivée
+    penalty       : float — pénalité d'altitude (0 = chemin le plus court/économique pur)
+    wind          : dict  — vecteur vent {'u', 'v', 'speed', 'dir_deg'} ou None
+    energy_mdl    : DroneEnergyModel ou None
+
+    Retourne
+    --------
+    list de (x_proj, y_proj) — chemin lissé, ou None si aucun chemin trouvé.
     """
     start_proj = current_map.convert_coords(*start_lon_lat)
-    end_proj = current_map.convert_coords(*end_lon_lat)
-    
+    end_proj   = current_map.convert_coords(*end_lon_lat)
+
     start_node = current_map.dataset.index(*start_proj)
-    end_node = current_map.dataset.index(*end_proj)
+    end_node   = current_map.dataset.index(*end_proj)
 
     if not current_map.is_valid(*start_node) or not current_map.is_valid(*end_node):
         print("Erreur : Le départ ou l'arrivée se situe en zone interdite (altitude ou hors zone).")
@@ -40,10 +78,10 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
 
     open_set = []
     heapq.heappush(open_set, (0, start_node))
-    
+
     came_from = {}
-    g_score = {start_node: 0}
-    f_score = {start_node: heuristic(start_node, end_node)}
+    g_score   = {start_node: 0}
+    f_score   = {start_node: heuristic(start_node, end_node)}
 
     while open_set:
         current = heapq.heappop(open_set)[1]
@@ -52,19 +90,24 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty):
             raw_path = reconstruct_path(current_map, came_from, current)
             return smooth_path_by_elevation(current_map, raw_path, epsilon=EPSILON_ALTITUDE)
 
-        for dr, dc in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (-1,1), (1,-1), (1,1)]:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                       (-1, -1), (-1, 1), (1, -1), (1, 1)]:
             neighbor = (current[0] + dr, current[1] + dc)
 
             if current_map.is_valid(neighbor[0], neighbor[1]):
-                tentative_g_score = g_score[current] + get_cost(current_map, current, neighbor, penalty)
+                tentative_g = g_score[current] + get_cost(
+                    current_map, current, neighbor, penalty,
+                    wind=wind, energy_mdl=energy_mdl
+                )
 
-                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, end_node)
+                    g_score[neighbor]   = tentative_g
+                    f_score[neighbor]   = tentative_g + heuristic(neighbor, end_node)
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
     return None
+
 
 def reconstruct_path(current_map, came_from, current):
     path = []
@@ -72,21 +115,22 @@ def reconstruct_path(current_map, came_from, current):
         lon_lat = current_map.dataset.xy(current[0], current[1])
         path.append(lon_lat)
         current = came_from[current]
-    
+
     lon_lat = current_map.dataset.xy(current[0], current[1])
     path.append(lon_lat)
-    
+
     return path[::-1]
+
 
 def _rdp_3d(points_3d, tolerance):
     """
     Ramer-Douglas-Peucker sur des points 3D (x, y, altitude).
-    Retourne un masque booléen des indices à conserver.
+    Retourne la liste des indices à conserver.
     """
     if len(points_3d) <= 2:
         return list(range(len(points_3d)))
 
-    keep = [False] * len(points_3d)
+    keep    = [False] * len(points_3d)
     keep[0] = True
     keep[-1] = True
 
@@ -96,15 +140,14 @@ def _rdp_3d(points_3d, tolerance):
         if end - start <= 1:
             continue
 
-        p1 = np.array(points_3d[start], dtype=float)
-        p2 = np.array(points_3d[end],   dtype=float)
+        p1      = np.array(points_3d[start], dtype=float)
+        p2      = np.array(points_3d[end],   dtype=float)
         segment = p2 - p1
         seg_len = np.linalg.norm(segment)
 
         if seg_len == 0:
             continue
 
-        # Distance perpendiculaire de chaque point intermédiaire au segment p1-p2
         max_dist = 0.0
         max_idx  = start
         for i in range(start + 1, end):
@@ -128,17 +171,16 @@ def _rdp_3d(points_3d, tolerance):
 def _split_by_climb_angle(path_3d, indices, max_angle_deg):
     """
     Après RDP, vérifie l'angle de montée/descente entre waypoints consécutifs.
-    Si l'angle dépasse max_angle_deg, insère le point le plus haut du segment intermédiaire.
-    path_3d : liste de (x, y, altitude) — coordonnées complètes avant RDP.
-    indices  : indices retenus par RDP (dans path_3d).
+    Si l'angle dépasse max_angle_deg, insère le point qui réduit le mieux la pente.
     """
     max_angle_rad = np.radians(max_angle_deg)
-    result = list(indices)
+    result  = list(indices)
     changed = True
 
     while changed:
-        changed = False
+        changed    = False
         new_result = [result[0]]
+
         for k in range(1, len(result)):
             i_prev = result[k - 1]
             i_curr = result[k]
@@ -150,12 +192,11 @@ def _split_by_climb_angle(path_3d, indices, max_angle_deg):
                 new_result.append(i_curr)
                 continue
 
-            dh = abs(p2[2] - p1[2])
+            dh    = abs(p2[2] - p1[2])
             angle = np.arctan2(dh, horiz)
 
             if angle > max_angle_rad:
-                # Cherche le point intermédiaire qui réduit le mieux l'angle
-                best_idx = None
+                best_idx   = None
                 best_angle = angle
                 for j in range(i_prev + 1, i_curr):
                     pm = np.array(path_3d[j])
@@ -175,24 +216,21 @@ def _split_by_climb_angle(path_3d, indices, max_angle_deg):
                     changed = True
 
             new_result.append(i_curr)
+
         result = new_result
 
     return result
 
 
 def smooth_path_by_elevation(current_map, path,
-                              epsilon=None,        # ignoré, gardé pour compatibilité
-                              max_step=None,       # ignoré
+                              epsilon=None,
+                              max_step=None,
                               rdp_tol=None,
                               max_climb=None):
     """
     Lissage 3D du chemin en deux étapes :
       1. RDP 3D  — supprime les micro-variations (zigzags)
       2. Contrôle d'angle — insère des waypoints si la pente est trop raide
-
-    Paramètres (priorité : argument > constante globale) :
-      rdp_tol   : tolérance RDP en mètres        (défaut : RDP_TOLERANCE)
-      max_climb : angle de montée max en degrés   (défaut : MAX_CLIMB_ANGLE)
     """
     if len(path) <= 2:
         return path
@@ -200,58 +238,227 @@ def smooth_path_by_elevation(current_map, path,
     tol   = rdp_tol   if rdp_tol   is not None else RDP_TOLERANCE
     angle = max_climb if max_climb is not None else MAX_CLIMB_ANGLE
 
-    # Construction des points 3D : (x_proj, y_proj, altitude_vol)
     pts3d = []
     for pt in path:
         h = current_map.get_fly_height(pt[0], pt[1])
         pts3d.append((pt[0], pt[1], h))
 
-    # Étape 1 : RDP 3D
     kept_indices = _rdp_3d(pts3d, tol)
-
-    # Étape 2 : contrôle angle de montée
     kept_indices = _split_by_climb_angle(pts3d, kept_indices, angle)
 
     return [path[i] for i in kept_indices]
 
-def boucle_principale(current_map, start_node, targets, penalty):
-    aller_path = [] 
-    retour_path = [] 
-    current_pos = start_node
-    remaining_targets = targets.copy()
 
-    while remaining_targets:
-        next_target = min(remaining_targets, 
-                          key=lambda t: heuristic(
-                              current_map.convert_coords(*current_pos), 
-                              current_map.convert_coords(*t)
-                          ))
-        
-        # Utiliser astar pour obtenir segment -> smoothing
-        segment = astar(current_map, current_pos, next_target, penalty)
+# ════════════════════════════════════════════════════════════════════════════
+#  Gestion des priorités
+# ════════════════════════════════════════════════════════════════════════════
+
+def _normalize_targets(targets):
+    """
+    Normalise la liste de targets pour accepter deux formats :
+      - ancien format : liste de tuples  (lon, lat)
+      - nouveau format : liste de dicts  {"point": (lon, lat), "priority": int}
+
+    Retourne une liste de dicts normalisés.
+    Priority 0 = urgence maximale (visité en premier).
+    """
+    normalized = []
+    for t in targets:
+        if isinstance(t, dict):
+            normalized.append({
+                "point":    t["point"],
+                "priority": int(t.get("priority", 1)),
+            })
+        else:
+            # tuple / liste → priorité neutre par défaut
+            normalized.append({"point": t, "priority": 1})
+    return normalized
+
+
+def _greedy_order_within_priority(current_map, start_pos, group):
+    """
+    Ordonne un groupe de targets (même priorité) par nearest-neighbor greedy
+    à partir de start_pos.  Retourne la liste ordonnée des dicts.
+    """
+    remaining = group.copy()
+    ordered   = []
+    pos       = start_pos
+
+    while remaining:
+        next_t = min(
+            remaining,
+            key=lambda t: heuristic(
+                current_map.convert_coords(*pos),
+                current_map.convert_coords(*t["point"]),
+            ),
+        )
+        ordered.append(next_t)
+        pos = next_t["point"]
+        remaining.remove(next_t)
+
+    return ordered
+
+
+def _build_ordered_targets(current_map, start_pos, targets_norm):
+    """
+    Construit la séquence complète de visite :
+      1. Regroupe les targets par niveau de priorité.
+      2. Traite les groupes du niveau le plus urgent (0) au moins urgent.
+      3. Au sein de chaque groupe, applique le greedy nearest-neighbor.
+
+    Retourne une liste ordonnée de dicts {"point", "priority"}.
+    """
+    from itertools import groupby
+
+    # Tri stable par priorité croissante
+    sorted_targets = sorted(targets_norm, key=lambda t: t["priority"])
+
+    ordered_all = []
+    current_pos = start_pos
+
+    for _priority, group_iter in groupby(sorted_targets, key=lambda t: t["priority"]):
+        group = list(group_iter)
+        ordered_group = _greedy_order_within_priority(current_map, current_pos, group)
+        ordered_all.extend(ordered_group)
+        if ordered_group:
+            current_pos = ordered_group[-1]["point"]
+
+    return ordered_all
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Boucle principale
+# ════════════════════════════════════════════════════════════════════════════
+
+def boucle_principale(current_map, start_node, targets, penalty,
+                      fixed_end=None,
+                      wind=None, energy_mdl=None):
+    """
+    Planifie le trajet aller (multi-cibles, avec priorités) puis le retour.
+
+    Paramètres
+    ----------
+    start_node : (lon, lat) — point de départ/retour
+    targets    : liste de tuples  (lon, lat)                        ← ancien format (compatible)
+              OU liste de dicts   {"point": (lon, lat),             ← nouveau format
+                                   "priority": int}
+                 priority 0 = urgence maximale (visité en premier).
+                 Les targets de même priorité sont ordonnés greedy entre eux.
+
+    fixed_end  : None | (lon, lat)
+                 • None      → le point final de l'aller est choisi automatiquement
+                               parmi tous les targets pour minimiser le trajet de retour
+                               vers start_node.  Le retour est alors optimisé.
+                 • (lon,lat) → le drone doit terminer l'aller sur ce point précis
+                               (doit être présent dans targets).
+
+    wind       : dict vent (optionnel) transmis à astar → get_cost
+    energy_mdl : DroneEnergyModel (optionnel) transmis à astar → get_cost
+
+    Retourne
+    --------
+    aller_path  : list de (x_proj, y_proj)
+    retour_path : list de (x_proj, y_proj)
+    """
+
+    # ── Normalisation ─────────────────────────────────────────────────────
+    targets_norm = _normalize_targets(targets)
+
+    if not targets_norm:
+        return [], []
+
+    # ── Cas fixed_end : on retire le point final de la liste libre,
+    #    on planifie les autres d'abord, puis on force la visite du fixed_end ──
+    if fixed_end is not None:
+        # Cherche le target correspondant à fixed_end (comparaison lâche)
+        end_candidates = [t for t in targets_norm
+                          if t["point"] == fixed_end or t["point"] == tuple(fixed_end)]
+        free_targets   = [t for t in targets_norm
+                          if t not in end_candidates]
+
+        ordered = _build_ordered_targets(current_map, start_node, free_targets)
+        # Ajoute le(s) fixed_end en dernier (priorité forcée)
+        ordered += end_candidates
+        print(f"[Planification] Ordre de visite (fixed_end={fixed_end}) :")
+
+    else:
+        # ── Mode optimisation de fin : on planifie dans l'ordre priorité/greedy,
+        #    MAIS on réordonne le dernier groupe libre pour minimiser le retour ──
+        ordered = _build_ordered_targets(current_map, start_node, targets_norm)
+
+        # Optimisation du dernier tronçon : parmi les targets du groupe de
+        # priorité la plus basse, choisir lequel placer en dernier pour
+        # minimiser dist(dernier → start_node).
+        if len(ordered) >= 2:
+            last_priority = ordered[-1]["priority"]
+            # Sépare le dernier groupe libre
+            last_group_start = next(
+                (i for i in range(len(ordered) - 1, -1, -1)
+                 if ordered[i]["priority"] != last_priority),
+                -1
+            ) + 1
+            last_group = ordered[last_group_start:]
+            prefix     = ordered[:last_group_start]
+
+            if len(last_group) > 1:
+                # Point de départ du dernier groupe
+                pre_pos = prefix[-1]["point"] if prefix else start_node
+
+                # Cherche le target du groupe qui minimise dist(target → start_node)
+                best_end = min(
+                    last_group,
+                    key=lambda t: heuristic(
+                        current_map.convert_coords(*t["point"]),
+                        current_map.convert_coords(*start_node),
+                    ),
+                )
+                # Réordonne le dernier groupe : greedy depuis pre_pos,
+                # mais force best_end en dernière position
+                last_group_without_best = [t for t in last_group if t is not best_end]
+                reordered_last = _greedy_order_within_priority(
+                    current_map, pre_pos, last_group_without_best
+                )
+                reordered_last.append(best_end)
+                ordered = prefix + reordered_last
+
+        print(f"[Planification] Ordre de visite optimisé (dernier = plus proche du retour) :")
+
+    for i, t in enumerate(ordered):
+        prio_str = f"priorité {t['priority']}" if t['priority'] != 1 else "priorité normale"
+        print(f"  [{i+1}] {t['point']}  ({prio_str})")
+
+    # ── Construction du chemin aller ──────────────────────────────────────
+    aller_path  = []
+    current_pos = start_node
+
+    for t in ordered:
+        target_pt = t["point"]
+        segment = astar(current_map, current_pos, target_pt, penalty,
+                        wind=wind, energy_mdl=energy_mdl)
 
         if segment:
             segment = smooth_path_by_elevation(current_map, segment, epsilon=EPSILON_ALTITUDE)
-            
             if not aller_path:
                 aller_path.extend(segment)
             else:
                 aller_path.extend(segment[1:])
-            
-            current_pos = next_target
-            remaining_targets.remove(next_target)
+            current_pos = target_pt
         else:
-            remaining_targets.remove(next_target)
+            print(f"  ⚠ Aucun chemin vers {target_pt}, cible ignorée.")
 
-    # PHASE RETOUR
-    print(f"Planification du retour : {current_pos} -> {start_node}")
+    # ── Phase retour ──────────────────────────────────────────────────────
+    print(f"[Planification] Retour : {current_pos} → {start_node}")
+    retour_path = []
+
     if current_pos == start_node:
-        print("Retour : déjà au point de départ, pas de chemin retour.")
-        retour_path = []
+        print("  Déjà au point de départ.")
     else:
-        segment_retour = astar(current_map, current_pos, start_node, penalty)
+        segment_retour = astar(current_map, current_pos, start_node, penalty,
+                               wind=wind, energy_mdl=energy_mdl)
         if segment_retour and len(segment_retour) >= 2:
-            retour_path = smooth_path_by_elevation(current_map, segment_retour, epsilon=EPSILON_ALTITUDE)
+            retour_path = smooth_path_by_elevation(
+                current_map, segment_retour, epsilon=EPSILON_ALTITUDE
+            )
         else:
             retour_path = []
 

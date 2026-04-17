@@ -350,7 +350,71 @@ def height_plot(heigth_array, security_height, max_tree_height, max_fly_height, 
     plt.legend(loc='upper right')
     plt.show()
 
-def mutliplot_path(current_map, paths, titles, targets_list=None):
+def _draw_wind_arrow(ax, wind):
+    """
+    Dessine une rose des vents compacte dans le coin bas-gauche de ax.
+    La flèche jaune pointe dans la direction vers laquelle le vent souffle.
+
+    wind : dict {'u': float, 'v': float, 'speed': float, 'dir_deg': float}
+      dir_deg = direction d'où vient le vent (convention météo : 0=N, 90=E)
+    """
+    import matplotlib.patches as mpatches
+    import math
+
+    speed   = wind.get('speed', 0.0)
+    dir_deg = wind.get('dir_deg', 0.0)
+    if speed < 0.01:
+        return
+
+    cx, cy    = 0.085, 0.085
+    arrow_len = 0.055
+
+    go_deg = (dir_deg + 180) % 360
+    go_rad = math.radians(go_deg)
+    dx =  math.sin(go_rad) * arrow_len
+    dy =  math.cos(go_rad) * arrow_len
+
+    # Cercle de fond
+    circle = mpatches.Circle(
+        (cx, cy), radius=0.068,
+        transform=ax.transAxes,
+        color='#1a1a2e', alpha=0.72, zorder=9, linewidth=0
+    )
+    ax.add_patch(circle)
+
+    # Croix cardinale
+    card_len = 0.042
+    for (label, adx, ady, ha, va) in [
+        ('N',  0,         card_len,  'center', 'bottom'),
+        ('S',  0,        -card_len,  'center', 'top'),
+        ('E',  card_len,  0,         'left',   'center'),
+        ('O', -card_len,  0,         'right',  'center'),
+    ]:
+        ax.text(cx + adx, cy + ady, label,
+                transform=ax.transAxes,
+                fontsize=6, color='#aaaaaa', ha=ha, va=va,
+                fontweight='bold', zorder=10)
+
+    # Flèche centrée sur (cx, cy)
+    sx = cx - dx * 0.5
+    sy = cy - dy * 0.5
+    ax.annotate('', xy=(sx + dx, sy + dy), xytext=(sx, sy),
+                xycoords='axes fraction', textcoords='axes fraction',
+                arrowprops=dict(arrowstyle='->', color='#FFD600',
+                                lw=2.0, mutation_scale=12),
+                zorder=11)
+
+    # Texte vitesse + direction
+    ax.text(cx, cy - 0.072,
+            f"{speed:.1f} m/s  {dir_deg:.0f}°",
+            transform=ax.transAxes,
+            fontsize=6.5, color='#FFD600', ha='center', va='top',
+            bbox=dict(boxstyle='round,pad=0.25', fc='#1a1a2e',
+                      ec='#FFD600', alpha=0.80, linewidth=0.7),
+            zorder=11)
+
+
+def mutliplot_path(current_map, paths, titles, targets_list=None, wind=None):
     """
     Affiche pour chaque trajet :
       - Colonne gauche  : vue carte (image + tracé)
@@ -414,15 +478,30 @@ def mutliplot_path(current_map, paths, titles, targets_list=None):
         ax_map.scatter(path_px[0][1],  path_px[0][0],  color='lime',  s=60, zorder=5, label='Départ')
         ax_map.scatter(path_px[-1][1], path_px[-1][0], color='red',   s=60, zorder=5, label='Arrivée')
 
-        # Cibles intermédiaires en orange ★
+        # ── Cibles intermédiaires en orange ★ avec numéro d'ordre ────────
         if targets_list is not None and i < len(targets_list) and targets_list[i]:
-            for tgt in targets_list[i]:
+            for order_idx, tgt in enumerate(targets_list[i]):
                 tgt_proj = current_map.convert_coords(tgt[0], tgt[1])
                 tgt_px   = dataset.index(tgt_proj[0], tgt_proj[1])
                 ax_map.scatter(tgt_px[1], tgt_px[0], color='orange', s=120,
                                zorder=7, marker='*', label='_nolegend_')
+                # Numéro d'ordre affiché à côté de chaque cible
+                ax_map.annotate(
+                    f" {order_idx + 1}",
+                    xy=(tgt_px[1], tgt_px[0]),
+                    xytext=(6, 6), textcoords='offset points',
+                    fontsize=8, fontweight='bold',
+                    color='orange',
+                    bbox=dict(boxstyle='round,pad=0.2', fc='#1a1a2e',
+                              ec='orange', alpha=0.75, linewidth=0.8),
+                    zorder=8
+                )
             ax_map.scatter([], [], color='orange', s=120, marker='*', label='Cibles')
         ax_map.set_title(f"Carte – trajet {i+1}", color='white', fontsize=9)
+
+        # ── Rose des vents (flèche + vitesse) ─────────────────────────
+        if wind is not None and wind.get('speed', 0) > 0:
+            _draw_wind_arrow(ax_map, wind)
         ax_map.set_xticks([]); ax_map.set_yticks([])
         ax_map.legend(loc='upper left', fontsize=7, facecolor='#222', labelcolor='white',
                       bbox_to_anchor=(0.0, 1.0), borderaxespad=0)
