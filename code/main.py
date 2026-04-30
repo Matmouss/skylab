@@ -1,4 +1,4 @@
-import topography, fly_control, os, json, graphics, test, time, logging
+import topography, fly_control, os, json, graphics, test, time, logging, threads, queue
 import numpy as np
 
 def log_state(logger, lat, lon, altitude, battery):
@@ -10,46 +10,33 @@ def change_drone_state(logger, old_state,state):
     logger.info(f"CHANGING DRONE STATE | {old_state} -> {state}")
     return state
 
-def get_data(capteurs = ["camera_rgb", "camera_thermique", "gps", "sms"]):
-    data = {}
-    if "camera_rgb" in capteurs:
-        data["camera_rgb"] = np.random.rand(100, 100, 3)
-    if "camera_thermique" in capteurs:
-        data["camera_thermique"] = np.random.rand(100, 100)
-    if "gps" in capteurs:
-        data["gps"] = np.random.rand(2)
-    if "sms" in capteurs:
-        data["sms"] = np.random.rand(1)
-
-    return data
-
-def send_data(data):
-    print(data)
 
 def init_drone():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(BASE_DIR)
 
-    try: 
+    try:
         os.remove("../logs/drone.log")
-    except: pass
+    except:
+        pass
+
     try:
         logging.basicConfig(
             filename=r"../logs/drone.log",
             level=logging.INFO,
-            format="%(asctime)s | %(levelname)s | %(message)s"
+            format="%(asctime)s | %(levelname)s | %(threadName)s | %(message)s"
         )
     except Exception as e:
         logging.error(f"FATAL ERROR | \n{e}")
         exit()
 
     logger = logging.getLogger()
-
     logger.info("DEBUT DE MISSION")
 
-    try :
+    try:
         config_json_path = "config.json"
-        config = json.load(open(config_json_path))
+        with open(config_json_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
     except Exception as e:
         logger.error(f"FATAL ERROR | \n{e}")
         exit()
@@ -57,14 +44,28 @@ def init_drone():
     current_map = topography.Map(config)
 
     state = change_drone_state(logger, None, 11)
-    start_time = time.time()
+    start_time = time.monotonic()
     lat, lon = 0, 0
     altitude = 0 # hors test mentionner l'altitude réelle de départ
 
-    main_loop(current_map, state, start_time, lat, lon, altitude, logger)
+    thread_ctx = threads.start_background_threads(logger)
+
+    try:
+        main_loop(
+            current_map=current_map,
+            state=state,
+            start_time=start_time,
+            lat=lat,
+            lon=lon,
+            altitude=altitude,
+            logger=logger,
+            thread_ctx=thread_ctx,
+        )
+    finally:
+        threads.stop_background_threads(thread_ctx)
 
 
-def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
+def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread_ctx):
     """
     La boucle principale du drone
 
@@ -91,17 +92,46 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
     """
 
     current_path = []
-    running_subprocess = []
 
     running = True
 
-    while running:
+    stop_event = thread_ctx["stop_event"]
+    health = thread_ctx["health"]
+    rx_queue = thread_ctx["rx_queue"]
+    send_queue = thread_ctx["send_queue"]
+    gps_queue = thread_ctx["gps_queue"]
+    alert_queue = thread_ctx["alert_queue"]
+
+    health.register("main")
+
+    #variable temporaire pour les tests
+    loops = 0
+
+    while running and not stop_event.is_set():
+        loop_start = time.monotonic()
+
         try:
+            try:
+                alert = alert_queue.get_nowait()
+                raise RuntimeError(f"watchdog alert: {alert}")
+            except queue.Empty:
+                pass
+
+            while not rx_queue.empty():
+                msg = rx_queue.get()
+                logger.info(f"SMS RECU | {msg}")
+
+            while not gps_queue.empty():
+                gps = gps_queue.get()
+                logger.info(f"GPS RECU | {gps}")
+
             match state:
                 case 11:
-                    for i in range(10):
-                        log_state(logger, i, i, i, 100-i)
-                    running = False
+                    log_state(logger, loops, loops, loops, 100-loops)
+                    
+                    if loops == 100:running = False
+                    else : loops += 1
+
                     # au sol
                     pass
                 case 12:
@@ -126,12 +156,20 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
 
                 case _:
                     print("Etat inconnu")
+                    logger.warning(f"Etat inconnu | {state}")
+
+            health.progress("main")
 
         except Exception as e:
             logger.critical(f"loop crash: {e}", exc_info=True)
             #emergency_procedure()
             #reset_system_state()
             state = change_drone_state(logger, state, 40)
+
+        elapsed = time.monotonic() - loop_start
+        target_period = 0.5
+        if elapsed < target_period:
+            time.sleep(target_period - elapsed)
 
     logger.info("FIN DE MISSION")
 
@@ -153,5 +191,3 @@ if __name__ == "__main__":
     test.astar_comparaison(current_map, 4)"""
 
     init_drone()
-
-    
