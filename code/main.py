@@ -100,6 +100,7 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread
     rx_queue = thread_ctx["rx_queue"]
     send_queue = thread_ctx["send_queue"]
     gps_queue = thread_ctx["gps_queue"]
+    
     alert_queue = thread_ctx["alert_queue"]
 
     health.register("main")

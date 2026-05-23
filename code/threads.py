@@ -36,12 +36,17 @@ def modem_thread(stop_event, health, rx_queue, send_queue, logger=None):
 
     while not stop_event.is_set():
         try:
-            if (random.random() < 0.1):
+            while not send_queue.empty():
+                msg = send_queue.get()
+                logger.info(f"SMS ENVOYE | {msg}")
 
+            if random.random() < 0.1:
                 msg = {"type": "sms", "data": "test"}
                 rx_queue.put(msg)
 
-                logger.info(f"message received: {msg}")
+            while not rx_queue.empty():
+                msg = rx_queue.get()
+                logger.info(f"SMS RECU | {msg}")
 
             health.progress(name)
 
