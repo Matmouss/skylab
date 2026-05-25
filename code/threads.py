@@ -123,22 +123,38 @@ def fourg_thread(stop_event, health, rx_queue, send_queue, logger=None, config=N
         return interface_ok() and ping_ok()
 
     def send_webhook(msg):
-        if not webhook:
-            logger.warning(f"4G SEND SKIPPED | no webhook | {msg}")
-            return False
+    if not webhook:
+        logger.warning(f"4G SEND SKIPPED | no webhook | {msg}")
+        return False
 
-        data = json.dumps(msg).encode("utf-8")
+    text = json.dumps(msg, indent=2, ensure_ascii=False)
 
-        req = urllib.request.Request(
-            webhook,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
+    if len(text) > 1800:
+        text = text[:1800] + "\n..."
 
-        with urllib.request.urlopen(req, timeout=send_timeout) as r:
-            return 200 <= r.status < 300
+    payload = {
+        "content": f"```json\n{text}\n```",
+        "allowed_mentions": {
+            "parse": []
+        }
+    }
 
+    data = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        webhook,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "skylab-drone/1.0"
+        },
+        method="POST"
+    )
+
+    with urllib.request.urlopen(req, timeout=send_timeout) as r:
+        return 200 <= r.status < 300 or r.status == 204
+    
+    
     def flush_send_queue():
         while not send_queue.empty():
             msg = send_queue.get()
