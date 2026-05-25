@@ -10,6 +10,25 @@ def change_drone_state(logger, old_state,state):
     logger.info(f"CHANGING DRONE STATE | {old_state} -> {state}")
     return state
 
+def build_state_ping(config, state, start_time, lat, lon, altitude, battery, current_path, latest_gps):
+    return {
+        "type": "ping",
+        "drone_id": config.get("drone_id", "unknown"),
+        "timestamp": time.time(),
+        "uptime_s": round(time.monotonic() - start_time, 2),
+        "state": state,
+        "position": {
+            "lat": lat,
+            "lon": lon,
+            "altitude": altitude
+        },
+        "battery": battery,
+        "mission": {
+            "path_len": len(current_path),
+            "has_path": len(current_path) > 0
+        },
+        "gps": latest_gps
+    }
 
 def init_drone():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +67,7 @@ def init_drone():
     lat, lon = 0, 0
     altitude = 0 # hors test mentionner l'altitude réelle de départ
 
-    thread_ctx = threads.start_background_threads(logger)
+    thread_ctx = threads.start_background_threads(logger, config)
 
     try:
         main_loop(
@@ -60,12 +79,13 @@ def init_drone():
             altitude=altitude,
             logger=logger,
             thread_ctx=thread_ctx,
+            config=config,
         )
     finally:
         threads.stop_background_threads(thread_ctx)
 
 
-def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread_ctx):
+def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread_ctx, config):
     """
     La boucle principale du drone
 
@@ -92,6 +112,9 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread
     """
 
     current_path = []
+    latest_gps = None
+    last_ping_time = 0
+    ping_period = 120
 
     running = True
 
@@ -123,8 +146,39 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread
                 logger.info(f"SMS RECU | {msg}")
 
             while not gps_queue.empty():
-                gps = gps_queue.get()
-                logger.info(f"GPS RECU | {gps}")
+                latest_gps = gps_queue.get()
+                logger.info(f"GPS RECU | {latest_gps}")
+
+                if "lat" in latest_gps:
+                    lat = latest_gps["lat"]
+
+                if "lon" in latest_gps:
+                    lon = latest_gps["lon"]
+
+                if "altitude" in latest_gps:
+                    altitude = latest_gps["altitude"]
+
+            now = time.monotonic()
+
+            if now - last_ping_time >= ping_period:
+                battery = 100 - loops  # valeur temporaire tant que la batterie réelle n'est pas lue
+
+                ping = build_state_ping(
+                    config=config,
+                    state=state,
+                    start_time=start_time,
+                    lat=lat,
+                    lon=lon,
+                    altitude=altitude,
+                    battery=battery,
+                    current_path=current_path,
+                    latest_gps=latest_gps
+                )
+
+                send_queue.put(ping)
+                last_ping_time = now
+
+                logger.info(f"PING AJOUTE A LA FILE D'ENVOI | {ping}")
 
             match state:
                 case 11:

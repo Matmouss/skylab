@@ -4,6 +4,5 @@ numpy
 shapely
 matplotlib
 pyproj
-random
-json
-heapq
+pymavlink
+pyserial
