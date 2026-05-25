@@ -87,8 +87,7 @@ def astar(current_map, start_lon_lat, end_lon_lat, penalty, wind=None, energy_md
         current = heapq.heappop(open_set)[1]
 
         if current == end_node:
-            raw_path = reconstruct_path(current_map, came_from, current)
-            return smooth_path_by_elevation(current_map, raw_path, epsilon=EPSILON_ALTITUDE)
+            return reconstruct_path(current_map, came_from, current)
 
         for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1),
                        (-1, -1), (-1, 1), (1, -1), (1, 1)]:
@@ -267,11 +266,11 @@ def _normalize_targets(targets):
         if isinstance(t, dict):
             normalized.append({
                 "point":    t["point"],
-                "priority": int(t.get("priority", 1)),
+                "priority": int(t.get("priority", 99)),
             })
         else:
             # tuple / liste → priorité neutre par défaut
-            normalized.append({"point": t, "priority": 1})
+            normalized.append({"point": t, "priority": 99})
     return normalized
 
 
@@ -424,7 +423,7 @@ def boucle_principale(current_map, start_node, targets, penalty,
         print(f"[Planification] Ordre de visite optimisé (dernier = plus proche du retour) :")
 
     for i, t in enumerate(ordered):
-        prio_str = f"priorité {t['priority']}" if t['priority'] != 1 else "priorité normale"
+        prio_str = "urgence maximale" if t['priority'] == 0 else (f"priorité {t['priority']}" if t['priority'] != 99 else "priorité normale")
         print(f"  [{i+1}] {t['point']}  ({prio_str})")
 
     # ── Construction du chemin aller ──────────────────────────────────────
