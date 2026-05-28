@@ -1,7 +1,8 @@
-import topography, fly_control, os, json, graphics, test, time, logging
+import topography, fly_control, os, json, graphics, test, time, logging, queue
 import numpy as np
 import weather_client
 import energy_model as em
+from threads import HealthRegistry, PixhawkData, PixhawkThread
 
 # ── Paramètres de planification ─────────────────────────────────────────────
 N_PATHS        = 1     # nombre de graphes comparatifs (mode test)
@@ -27,6 +28,11 @@ def change_drone_state(logger, old_state, state):
 
 
 def get_data(capteurs=None):
+    """
+    Retourne les données capteurs.
+    Si le Pixhawk est connecté (pixhawk_data fourni), le GPS et la batterie
+    proviennent de la liaison MAVLink ; sinon on simule.
+    """
     if capteurs is None:
         capteurs = ["camera_rgb", "camera_thermique", "gps", "sms"]
     data = {}
@@ -42,7 +48,7 @@ def send_data(data):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  Initialisation du drone (logging + config)
+#  Initialisation du drone (logging + config + threads)
 # ════════════════════════════════════════════════════════════════════════════
 
 def init_drone():
@@ -76,19 +82,40 @@ def init_drone():
 
     current_map = topography.Map(config)
 
+    # ── Démarrage du thread Pixhawk ──────────────────────────────────────
+    health        = HealthRegistry()
+    pixhawk_data  = PixhawkData()
+    mission_queue = queue.Queue()
+
+    pixhawk_thread = PixhawkThread(
+        pixhawk_data  = pixhawk_data,
+        mission_queue = mission_queue,
+        health        = health,
+    )
+    pixhawk_thread.start()
+    logger.info("[Main] Thread Pixhawk démarré")
+
     state      = change_drone_state(logger, None, 11)
     start_time = time.time()
     lat, lon   = 0, 0
-    altitude   = 0   # hors test : mentionner l'altitude réelle de départ
+    altitude   = 0   # hors test : l'altitude réelle viendra du Pixhawk
 
-    main_loop(current_map, state, start_time, lat, lon, altitude, logger)
+    main_loop(
+        current_map, state, start_time, lat, lon, altitude, logger,
+        pixhawk_data=pixhawk_data,
+        mission_queue=mission_queue,
+        pixhawk_thread=pixhawk_thread,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
 #  Boucle principale du drone
 # ════════════════════════════════════════════════════════════════════════════
 
-def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
+def main_loop(current_map, state, start_time, lat, lon, altitude, logger,
+              pixhawk_data: PixhawkData = None,
+              mission_queue: queue.Queue = None,
+              pixhawk_thread: PixhawkThread = None):
     """
     Boucle d'états du drone.
 
@@ -110,6 +137,17 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
 
     while running:
         try:
+            # ── Lecture GPS + batterie depuis le Pixhawk ──────────────
+            if pixhawk_data is not None:
+                pix = pixhawk_data.snapshot()
+                if pix["lat"] is not None:
+                    lat, lon = pix["lat"], pix["lon"]
+                if pix["relative_alt"] is not None:
+                    altitude = pix["relative_alt"]
+                battery = pix["battery_pct"]
+            else:
+                battery = None
+
             match state:
                 case 11:
                     # Au sol — simulation de logs pour la démo
@@ -126,8 +164,8 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
                     pass
 
                 case 14:
-                    # En vol
-                    pass
+                    # En vol — log de l'état GPS/batterie réel
+                    log_state(logger, lat, lon, altitude, battery)
 
                 case 15:
                     # Scan local
@@ -148,6 +186,12 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger):
             logger.critical(f"loop crash: {e}", exc_info=True)
             state = change_drone_state(logger, state, 40)
 
+    # ── Arrêt propre du thread Pixhawk ───────────────────────────────────
+    if pixhawk_thread is not None:
+        pixhawk_thread.stop()
+        pixhawk_thread.join(timeout=3)
+        logger.info("[Main] Thread Pixhawk arrêté")
+
     logger.info("FIN DE MISSION")
 
 
@@ -166,11 +210,9 @@ if __name__ == "__main__":
     current_map = topography.Map(config)
 
     # ── 1. Récupération des données météo ────────────────────────────────
-    # Centre approximatif de la zone de vol (à adapter selon votre config.json)
     bounds     = current_map.dataset.bounds
-    lat_center = (bounds.bottom + bounds.top)    / 2   # en coordonnées projetées
-    lon_center = (bounds.left   + bounds.right)  / 2
-    # Conversion vers WGS84 pour l'API météo
+    lat_center = (bounds.bottom + bounds.top)   / 2
+    lon_center = (bounds.left   + bounds.right) / 2
     from pyproj import Transformer
     transformer_to_wgs84 = Transformer.from_crs(
         current_map.dataset.crs, "EPSG:4326", always_xy=True
@@ -224,7 +266,7 @@ if __name__ == "__main__":
         print(f"  Temps estimé: {bilan_retour['time_s'] / 60:.1f} min")
 
     if aller_path and retour_path:
-        total_j = bilan_aller['energy_j'] + bilan_retour['energy_j']
+        total_j   = bilan_aller['energy_j'] + bilan_retour['energy_j']
         total_pct = total_j / (energy_mdl.battery_wh * 3600) * 100
         total_min = (bilan_aller['time_s'] + bilan_retour['time_s']) / 60
         print(f"\n[Bilan total]  {total_j/1000:.2f} kJ — "
@@ -257,5 +299,5 @@ if __name__ == "__main__":
             wind=wind
         )
 
-    # ── 7. Démarrage de la boucle drone ──────────────────────────────────
+    # ── 7. Démarrage de la boucle drone (avec thread Pixhawk) ────────────
     init_drone()
