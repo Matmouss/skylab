@@ -1,13 +1,36 @@
-2026-05-29 09:56:46,507 | INFO | DEBUT DE MISSION
-2026-05-29 09:56:46,812 | INFO | CHANGING DRONE STATE | None -> 11
-2026-05-29 09:56:46,812 | INFO | STATE | lat=0 lon=0 alt=0m battery=100%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=1 lon=1 alt=1m battery=99%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=2 lon=2 alt=2m battery=98%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=3 lon=3 alt=3m battery=97%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=4 lon=4 alt=4m battery=96%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=5 lon=5 alt=5m battery=95%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=6 lon=6 alt=6m battery=94%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=7 lon=7 alt=7m battery=93%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=8 lon=8 alt=8m battery=92%
-2026-05-29 09:56:46,812 | INFO | STATE | lat=9 lon=9 alt=9m battery=91%
-2026-05-29 09:56:46,812 | INFO | FIN DE MISSION
+2026-05-29 10:16:11,585 | INFO | MainThread | DEBUT DE MISSION
+2026-05-29 10:16:11,887 | INFO | MainThread | CHANGING DRONE STATE | None -> 11
+2026-05-29 10:16:11,887 | INFO | fourg | thread started
+2026-05-29 10:16:11,888 | INFO | fourg | 4G START | sudo pppd call gprs
+2026-05-29 10:16:11,888 | INFO | watchdog | thread started
+2026-05-29 10:16:11,888 | INFO | MainThread | all threads started
+2026-05-29 10:16:11,904 | INFO | MainThread | PING AJOUTE A LA FILE D'ENVOI | {'type': 'ping', 'drone_id': 'unknown', 'timestamp': 1780042571.903869, 'uptime_s': 0.02, 'state': 11, 'position': {'lat': 0, 'lon': 0, 'altitude': 0}, 'battery': 100, 'mission': {'path_len': 0, 'has_path': False}, 'gps': None}
+2026-05-29 10:16:11,904 | INFO | MainThread | STATE | lat=0 lon=0 alt=0m battery=100%
+2026-05-29 10:16:11,928 | WARNING | fourg | 4G SEND SKIPPED | no webhook | {'type': 'ping', 'drone_id': 'unknown', 'timestamp': 1780042571.903869, 'uptime_s': 0.02, 'state': 11, 'position': {'lat': 0, 'lon': 0, 'altitude': 0}, 'battery': 100, 'mission': {'path_len': 0, 'has_path': False}, 'gps': None}
+2026-05-29 10:16:11,928 | WARNING | fourg | 4G SEND FAIL | attempt=1/3 | webhook returned bad status
+2026-05-29 10:16:11,935 | INFO | gps | thread started | port=/dev/ttyACM0 baud=57600
+2026-05-29 10:16:11,935 | INFO | gps | GPS CONNECT | /dev/ttyACM0@57600
+2026-05-29 10:16:11,939 | ERROR | gps | GPS CONNECT FAIL | [Errno 2] could not open port /dev/ttyACM0: [Errno 2] No such file or directory: '/dev/ttyACM0'
+2026-05-29 10:16:12,405 | INFO | MainThread | SMS RECU | {'type': '4g', 'status': 'starting'}
+2026-05-29 10:16:12,405 | INFO | MainThread | STATE | lat=1 lon=1 alt=1m battery=99%
+2026-05-29 10:16:12,906 | INFO | MainThread | STATE | lat=2 lon=2 alt=2m battery=98%
+2026-05-29 10:16:12,934 | ERROR | fourg | 4G DEAD | pppd exited rc=1
+2026-05-29 10:16:13,113 | ERROR | watchdog | RESTART THREAD | gps | reason=no progress
+2026-05-29 10:16:13,406 | INFO | MainThread | SMS RECU | {'type': '4g', 'status': 'restarting'}
+2026-05-29 10:16:13,406 | INFO | MainThread | STATE | lat=3 lon=3 alt=3m battery=97%
+2026-05-29 10:16:13,907 | INFO | MainThread | STATE | lat=4 lon=4 alt=4m battery=96%
+2026-05-29 10:16:13,944 | INFO | gps | thread stopped
+2026-05-29 10:16:13,945 | INFO | gps | thread started | port=/dev/ttyACM0 baud=57600
+2026-05-29 10:16:13,945 | INFO | gps | GPS CONNECT | /dev/ttyACM0@57600
+2026-05-29 10:16:13,946 | ERROR | gps | GPS CONNECT FAIL | [Errno 2] could not open port /dev/ttyACM0: [Errno 2] No such file or directory: '/dev/ttyACM0'
+2026-05-29 10:16:14,408 | CRITICAL | MainThread | loop crash: watchdog alert: {'type': 'watchdog', 'action': 'restart', 'thread': 'gps', 'reason': 'no progress', 'count': 1}
+Traceback (most recent call last):
+  File "/Users/sunxuanqi/Desktop/S6/SkyLab/skylab/code/main.py", line 280, in main_loop
+    raise RuntimeError(f"watchdog alert: {alert}")
+RuntimeError: watchdog alert: {'type': 'watchdog', 'action': 'restart', 'thread': 'gps', 'reason': 'no progress', 'count': 1}
+2026-05-29 10:16:14,411 | INFO | MainThread | CHANGING DRONE STATE | 11 -> 40
+2026-05-29 10:16:14,553 | CRITICAL | watchdog | MAIN FAILURE | main no progress | full program restart required
+2026-05-29 10:16:14,909 | INFO | MainThread | FIN DE MISSION
+2026-05-29 10:16:14,909 | INFO | MainThread | stopping threads
+2026-05-29 10:16:15,949 | INFO | gps | thread stopped
+2026-05-29 10:16:16,910 | INFO | MainThread | all threads stopped
