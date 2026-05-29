@@ -7,7 +7,6 @@ import os
 import signal
 import json
 import urllib.request
-from pymavlink import mavutil
 
 class HealthRegistry:
     def __init__(self):
@@ -267,8 +266,10 @@ def gps_thread(stop_event, health, gps_queue, logger=None, config=None):
         GLOBAL_POSITION_INT  → lat (°×1e-7), lon (°×1e-7), alt (mm MSL),
                                 relative_alt (mm AGL), vx, vy, vz (cm/s),
                                 hdg (°×1e-2)
+        SYS_STATUS           → voltage_battery (mV), current_battery (cA),
+                                battery_remaining (%)
     """
-
+    from pymavlink import mavutil
 
     name = "gps"
     health.register(name)
@@ -300,10 +301,23 @@ def gps_thread(stop_event, health, gps_queue, logger=None, config=None):
             2,   # 2 Hz
             1    # start
         )
+        # Demande un flux SYS_STATUS (batterie) à ~1 Hz
+        conn.mav.request_data_stream_send(
+            conn.target_system,
+            conn.target_component,
+            mavutil.mavlink.MAV_DATA_STREAM_EXTENDED_STATUS,
+            1,   # 1 Hz
+            1    # start
+        )
         return conn
 
-    conn = None
+    conn        = None
     last_update = 0.0
+    last_battery = {
+        "battery_pct":     -1,    # % restant (-1 = inconnu)
+        "voltage_v":       -1.0,  # Volts
+        "current_a":       -1.0,  # Ampères
+    }
 
     while not stop_event.is_set():
         try:
@@ -317,9 +331,9 @@ def gps_thread(stop_event, health, gps_queue, logger=None, config=None):
                     health.progress(name)   # évite un faux timeout watchdog
                     continue
 
-            # ── Lecture non-bloquante ──────────────────────────────────────
+            # ── Lecture non-bloquante (GPS ou batterie) ────────────────────
             msg = conn.recv_match(
-                type="GLOBAL_POSITION_INT",
+                type=["GLOBAL_POSITION_INT", "SYS_STATUS"],
                 blocking=True,
                 timeout=timeout_s
             )
@@ -335,6 +349,21 @@ def gps_thread(stop_event, health, gps_queue, logger=None, config=None):
                 health.progress(name)
                 continue
 
+            # ── Mise à jour batterie (asynchrone, sans contrainte de période)
+            if msg.get_type() == "SYS_STATUS":
+                pct = msg.battery_remaining           # % (−1 si inconnu)
+                v   = msg.voltage_battery  * 1e-3     # mV → V
+                a   = msg.current_battery  * 1e-2     # cA → A
+                last_battery = {
+                    "battery_pct": pct,
+                    "voltage_v":   round(v, 3),
+                    "current_a":   round(a, 3),
+                }
+                logger.info(f"battery update: {last_battery}")
+                health.progress(name)
+                continue
+
+            # ── À partir d'ici : msg est forcément GLOBAL_POSITION_INT ─────
             now = time.monotonic()
 
             if now - last_update < gps_period:
@@ -356,12 +385,16 @@ def gps_thread(stop_event, health, gps_queue, logger=None, config=None):
             gps_data = {
                 "lat":          lat,
                 "lon":          lon,
-                "altitude":     altitude,       # AGL — utilisé par main_loop
-                "altitude_msl": altitude_msl,   # MSL — pour info
+                "altitude":     altitude,           # AGL — utilisé par main_loop
+                "altitude_msl": altitude_msl,       # MSL — pour info
                 "vx":           vx,
                 "vy":           vy,
                 "vz":           vz,
                 "heading":      heading,
+                # ── Batterie — dernière valeur connue du SYS_STATUS ────────
+                "battery_pct":  last_battery["battery_pct"],
+                "voltage_v":    last_battery["voltage_v"],
+                "current_a":    last_battery["current_a"],
             }
 
             gps_queue.put(gps_data)

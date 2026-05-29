@@ -277,6 +277,7 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread
     latest_gps = None
     last_ping_time = 0
     ping_period = 120
+    battery = -1  # mis à jour en temps réel par le gps_thread (Pixhawk SYS_STATUS)
 
     running = True
 
@@ -320,10 +321,12 @@ def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread
                 if "altitude" in latest_gps:
                     altitude = latest_gps["altitude"]
 
+                if "battery_pct" in latest_gps and latest_gps["battery_pct"] != -1:
+                    battery = latest_gps["battery_pct"]  # % batterie réelle (Pixhawk SYS_STATUS)
+
             now = time.monotonic()
 
             if now - last_ping_time >= ping_period:
-                battery = 100 - loops  # valeur temporaire tant que la batterie réelle n'est pas lue
 
                 ping = build_state_ping(
                     config=config,
