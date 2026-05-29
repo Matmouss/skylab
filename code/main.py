@@ -3,10 +3,17 @@ import numpy as np
 import weather_client
 import energy_model as em
 
+# ── Paramètres de planification ─────────────────────────────────────────────
 N_PATHS        = 1     # nombre de graphes comparatifs (mode test)
 PENALTY_MIN    = 0.5
 PENALTY_MAX    = 0.5
 EPSILON_ALT    = 0.5   # seuil de lissage (mètres)
+# ────────────────────────────────────────────────────────────────────────────
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Fonctions utilitaires de la boucle drone
+# ════════════════════════════════════════════════════════════════════════════
 
 def log_state(logger, lat, lon, altitude, battery):
     logger.info(
@@ -37,15 +44,50 @@ def build_state_ping(config, state, start_time, lat, lon, altitude, battery, cur
         "gps": latest_gps
     }
 
+def get_data(capteurs=None):
+    if capteurs is None:
+        capteurs = ["camera_rgb", "camera_thermique", "gps", "sms"]
+    data = {}
+    if "camera_rgb"       in capteurs: data["camera_rgb"]       = np.random.rand(100, 100, 3)
+    if "camera_thermique" in capteurs: data["camera_thermique"] = np.random.rand(100, 100)
+    if "gps"              in capteurs: data["gps"]              = np.random.rand(2)
+    if "sms"              in capteurs: data["sms"]              = np.random.rand(1)
+    return data
+
+
+def send_data(data):
+    print(data)
+
 
 # ════════════════════════════════════════════════════════════════════════════
-#  Planification de mission (météo + A* + énergie + affichage)
+#  Planification de mission (météo + A* + énergie + export JSON)
 # ════════════════════════════════════════════════════════════════════════════
 
-def plan_mission(current_map, config):
+def _path_to_lonlat(current_map, path):
+    """
+    Convertit une liste de (x_proj, y_proj) en liste de [lon, lat] WGS84.
+    """
+    from pyproj import Transformer
+    transformer = Transformer.from_crs(
+        current_map.dataset.crs, "EPSG:4326", always_xy=True
+    )
+    waypoints = []
+    for x, y in path:
+        lon, lat = transformer.transform(x, y)
+        waypoints.append([round(lon, 13), round(lat, 13)])
+    return waypoints
+
+
+def plan_mission(current_map, config, output_path="mission.json"):
     """
     Calcule le trajet aller/retour avec vent et modèle énergétique,
-    affiche le bilan et les graphiques, et retourne les chemins planifiés.
+    affiche le bilan en console et sauvegarde les waypoints en JSON.
+
+    Format du JSON :
+    {
+        "aller":  [[lon, lat], ...],
+        "retour": [[lon, lat], ...]
+    }
 
     Retourne
     --------
@@ -55,11 +97,9 @@ def plan_mission(current_map, config):
     energy_mdl  : DroneEnergyModel instancié
     """
     # ── 1. Récupération des données météo ────────────────────────────────
-    # Centre approximatif de la zone de vol
     bounds     = current_map.dataset.bounds
     lat_center = (bounds.bottom + bounds.top)   / 2
     lon_center = (bounds.left   + bounds.right) / 2
-    # Conversion vers WGS84 pour l'API météo
     from pyproj import Transformer
     transformer_to_wgs84 = Transformer.from_crs(
         current_map.dataset.crs, "EPSG:4326", always_xy=True
@@ -124,30 +164,19 @@ def plan_mission(current_map, config):
         if total_pct > 80:
             print("  ⚠ Attention : consommation > 80 % de la batterie !")
 
-    # ── 6. Affichage graphique ────────────────────────────────────────────
-    if aller_path:
-        plot_paths  = [aller_path]
-        plot_titles = [
-            f"Aller | {len(aller_path)} wp | "
-            f"{bilan_aller['energy_j']/1000:.1f} kJ | "
-            f"{bilan_aller['time_s']/60:.1f} min"
-        ]
+    # ── 6. Export JSON des waypoints en lon/lat ───────────────────────────
+    mission_json = {
+        "aller":  _path_to_lonlat(current_map, aller_path)  if aller_path  else [],
+        "retour": _path_to_lonlat(current_map, retour_path) if retour_path else [],
+    }
 
-        if retour_path:
-            plot_paths.append(retour_path)
-            plot_titles.append(
-                f"Retour | {len(retour_path)} wp | "
-                f"{bilan_retour['energy_j']/1000:.1f} kJ | "
-                f"{bilan_retour['time_s']/60:.1f} min"
-            )
+    os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) else None
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(mission_json, f, indent=2, ensure_ascii=False)
 
-        graphics.mutliplot_path(
-            current_map,
-            plot_paths,
-            plot_titles,
-            targets_list=[targets, []],
-            wind=wind
-        )
+    print(f"\n[Mission] Waypoints sauvegardés → {output_path}")
+    print(f"          aller : {len(mission_json['aller'])} points")
+    print(f"          retour: {len(mission_json['retour'])} points")
 
     return aller_path, retour_path, wind, energy_mdl
 
@@ -188,6 +217,9 @@ def init_drone():
 
     current_map = topography.Map(config)
 
+    # ── Planification de mission (A* + énergie + export JSON) ────────────
+    plan_mission(current_map, config, output_path="mission.json")
+
     state = change_drone_state(logger, None, 11)
     start_time = time.monotonic()
     lat, lon = 0, 0
@@ -210,6 +242,10 @@ def init_drone():
     finally:
         threads.stop_background_threads(thread_ctx)
 
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Boucle principale du drone
+# ════════════════════════════════════════════════════════════════════════════
 
 def main_loop(current_map, state, start_time, lat, lon, altitude, logger, thread_ctx, config):
     """
